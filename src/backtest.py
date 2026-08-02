@@ -18,9 +18,11 @@ import numpy as np
 import pandas as pd
 
 from . import crypto_model as cm
+from . import indicators as ind
 
 MIN_BARS_FOR_SIGNAL = 25  # EMA-21 needs ~21 bars to stabilize; a bit of margin
 DEFAULT_HORIZON_BARS = 16  # 16 * 15m = 4h, matching tracking.DEFAULT_HORIZON_HOURS
+DEFAULT_TP_SL_WATCH_BARS = 64  # 16h at 15m -- how far forward to watch for TP/SL
 
 
 def resample_closes(klines_15m: pd.DataFrame, rule: str) -> pd.Series:
@@ -38,15 +40,44 @@ def _signal_direction(value: float) -> int:
     return 1 if value >= 0 else -1
 
 
+def _tp_sl_outcome(df: pd.DataFrame, start_idx: int, predicted_up: bool,
+                   levels: dict, max_watch_bars: int) -> str:
+    """Scan forward bar-by-bar for whether TP or SL is touched first.
+
+    Uses each bar's high/low (not just its close), since a level can be hit
+    intrabar without the close reflecting it. If a single bar's range touches
+    both TP and SL (a wide/gappy candle), we cannot tell which came first
+    from OHLC data alone -- SL is assumed to win that tie, the conservative
+    (not-optimistic) convention standard in backtesting.
+
+    Returns "TP", "SL", or "TIMEOUT" (neither touched within the window).
+    """
+    end_idx = min(start_idx + 1 + max_watch_bars, len(df))
+    for j in range(start_idx + 1, end_idx):
+        bar = df.iloc[j]
+        if predicted_up:
+            tp_hit = bar["high"] >= levels["take_profit"]
+            sl_hit = bar["low"] <= levels["stop_loss"]
+        else:
+            tp_hit = bar["low"] <= levels["take_profit"]
+            sl_hit = bar["high"] >= levels["stop_loss"]
+        if sl_hit:
+            return "SL"
+        if tp_hit:
+            return "TP"
+    return "TIMEOUT"
+
+
 def run_price_action_backtest(klines_15m: pd.DataFrame, horizon_bars: int = DEFAULT_HORIZON_BARS,
-                               mtf_weights: dict | None = None) -> dict:
+                               mtf_weights: dict | None = None,
+                               tp_sl_watch_bars: int = DEFAULT_TP_SL_WATCH_BARS) -> dict:
     """Simulate the MTF price-action model bar-by-bar over historical data.
 
     Returns overall hit-rate/Brier stats, a confidence-bucket breakdown (a
     well-calibrated model should do better on its high-confidence calls than
-    its low-confidence ones), and standalone hit rates for each individual
-    signal per timeframe -- so you can see which components are actually
-    pulling their weight instead of assuming the current weights are right.
+    its low-confidence ones), standalone hit rates for each individual signal
+    per timeframe, and a TP/SL section testing whether crypto_model's
+    ATR-based stop-loss/take-profit levels would actually have paid off.
     """
     weights = mtf_weights or cm.MTF_WEIGHTS
     df = klines_15m.reset_index(drop=True)
@@ -63,6 +94,7 @@ def run_price_action_backtest(klines_15m: pd.DataFrame, horizon_bars: int = DEFA
 
     trials = []
     signal_hits: dict[str, list[bool]] = {}
+    tp_sl_outcomes: list[str] = []
 
     for i in range(MIN_BARS_FOR_SIGNAL, n - horizon_bars):
         current_time = df["open_time"].iloc[i]
@@ -102,6 +134,14 @@ def run_price_action_backtest(klines_15m: pd.DataFrame, horizon_bars: int = DEFA
             "correct": correct,
         })
 
+        # TP/SL check: ATR computed causally (only bars up to and including
+        # i), exactly like the score above.
+        atr_value = ind.atr(df.iloc[: i + 1], cm.ATR_PERIOD)
+        levels = cm.compute_levels("NAIK" if predicted_up else "TURUN", current_close, atr_value)
+        if levels is not None:
+            outcome = _tp_sl_outcome(df, i, predicted_up, levels, tp_sl_watch_bars)
+            tp_sl_outcomes.append(outcome)
+
         for tf, s in tf_scores.items():
             for sig_name in ("rsi_signal", "ema_signal", "momentum_signal"):
                 key = f"{sig_name} @ {tf}"
@@ -132,6 +172,27 @@ def run_price_action_backtest(klines_15m: pd.DataFrame, horizon_bars: int = DEFA
         for name, hits in signal_hits.items()
     }
 
+    tp_count = tp_sl_outcomes.count("TP")
+    sl_count = tp_sl_outcomes.count("SL")
+    timeout_count = tp_sl_outcomes.count("TIMEOUT")
+    resolved = tp_count + sl_count  # excludes timeouts: neither a win nor a loss
+    tp_sl_stats = {
+        "total": len(tp_sl_outcomes),
+        "tp": tp_count,
+        "sl": sl_count,
+        "timeout": timeout_count,
+        "tp_rate": (tp_count / resolved) if resolved else None,
+        # Expectancy in R-multiples (1R = the SL distance): a positive number
+        # means the ATR-based TP/SL scheme would have made money historically
+        # net of its win rate, given the current risk:reward ratio -- not
+        # just "R:R looks fine on paper". Timeouts are excluded since they
+        # are neither a realized win nor a realized loss.
+        "expectancy_r": (
+            (tp_count / resolved) * (cm.TP_ATR_MULT / cm.SL_ATR_MULT) - (sl_count / resolved)
+            if resolved else None
+        ),
+    }
+
     return {
         "total": total,
         "correct": correct_count,
@@ -139,6 +200,7 @@ def run_price_action_backtest(klines_15m: pd.DataFrame, horizon_bars: int = DEFA
         "brier": brier,
         "confidence_buckets": bucket_stats,
         "signal_hit_rates": signal_stats,
+        "tp_sl": tp_sl_stats,
         "horizon_bars": horizon_bars,
         "date_range": (df["open_time"].iloc[MIN_BARS_FOR_SIGNAL], df["open_time"].iloc[n - horizon_bars - 1]),
     }

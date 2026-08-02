@@ -21,6 +21,16 @@ WEIGHTS = {
 
 MAX_CONFIDENCE = 0.85  # never claim near-certainty
 
+# Stop-loss/take-profit sizing: distances are multiples of ATR (the coin's
+# own recent volatility in price units), not an arbitrary fixed percentage,
+# so a calm coin and a wild one get proportionally different levels.
+# 1.5x/3x gives a 1:2 risk:reward ratio, a common minimum bar in trading --
+# but this is a starting assumption. Check the Backtest tab's TP/SL hit-rate
+# section before trusting it; it is not validated by default.
+ATR_PERIOD = 14
+SL_ATR_MULT = 1.5
+TP_ATR_MULT = 3.0
+
 
 @dataclass
 class SignalBreakdown:
@@ -94,6 +104,33 @@ def timeframe_score(closes) -> dict:
     }
 
 
+def compute_levels(direction: str, entry_price: float, atr_value: float,
+                   sl_mult: float = SL_ATR_MULT, tp_mult: float = TP_ATR_MULT) -> dict | None:
+    """Entry/stop-loss/take-profit reference levels sized off ATR.
+
+    Returns None when ATR can't be computed (too little data / degenerate
+    zero volatility) rather than emitting a stop-loss equal to the entry
+    price, which would be nonsense.
+    """
+    if atr_value is None or not np.isfinite(atr_value) or atr_value <= 0:
+        return None
+
+    if direction == "NAIK":
+        stop_loss = entry_price - sl_mult * atr_value
+        take_profit = entry_price + tp_mult * atr_value
+    else:
+        stop_loss = entry_price + sl_mult * atr_value
+        take_profit = entry_price - tp_mult * atr_value
+
+    return {
+        "entry": entry_price,
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
+        "atr": atr_value,
+        "risk_reward": tp_mult / sl_mult,
+    }
+
+
 def predict_mtf(symbol: str, klines_by_tf: dict, funding_rate: float, order_book: dict,
                 tf_weights: dict | None = None) -> dict:
     """Multi-timeframe prediction: blends price-action across intervals, then
@@ -150,6 +187,12 @@ def predict_mtf(symbol: str, klines_by_tf: dict, funding_rate: float, order_book
     any_tf = next(iter(tf_results))
     last_price = float(klines_by_tf[any_tf]["close"].iloc[-1])
 
+    # ATR is computed off 15m (the finest granularity fetched) when
+    # available, falling back to whatever timeframe is on hand.
+    atr_source = klines_by_tf.get("15m", klines_by_tf[any_tf])
+    atr_value = ind.atr(atr_source, ATR_PERIOD)
+    levels = compute_levels(direction, last_price, atr_value)
+
     return {
         "symbol": symbol,
         "direction": direction,
@@ -159,6 +202,7 @@ def predict_mtf(symbol: str, klines_by_tf: dict, funding_rate: float, order_book
         "funding_rate": funding_rate,
         "timeframes": tf_results,
         "alignment": (agreeing, len(tf_results)),
+        "levels": levels,
         "breakdown": [
             SignalBreakdown("Price Action (MTF)", price_action_score, price_action_score, price_action_share),
             SignalBreakdown("Funding Rate", funding_rate, funding_signal, WEIGHTS["funding_rate"]),

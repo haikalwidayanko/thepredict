@@ -6,10 +6,13 @@ Web app Streamlit dengan dua fitur:
    hari ini (berdasarkan rentang harga intraday & volume), lalu memberi prediksi
    arah jangka pendek dari model ensemble rule-based **multi-timeframe**
    (RSI, EMA 9/21 cross, momentum dihitung terpisah di 15m/1h/4h lalu digabung,
-   plus funding rate & order book imbalance). Dilengkapi tab **Backtest** untuk
-   menguji ulang model di data historis (walk-forward, tanpa lookahead bias),
-   lihat mana sinyal yang beneran menambah akurasi dan mana yang tidak. Sumber
-   data otomatis memilih antara Binance Futures dan Gate.io Futures (lihat
+   plus funding rate & order book imbalance). Setiap prediksi disertai level
+   **Entry / Stop Loss / Take Profit** yang dihitung dari ATR (volatilitas
+   nyata coin itu, bukan persentase tetap). Dilengkapi tab **Backtest** untuk
+   menguji ulang model di data historis (walk-forward, tanpa lookahead bias) —
+   termasuk mengecek apakah TP beneran kena duluan dibanding SL secara
+   historis, dan sinyal mana yang beneran menambah akurasi. Sumber data
+   otomatis memilih antara Binance Futures dan Gate.io Futures (lihat
    bagian [Sumber data & blokir jaringan](#sumber-data--blokir-jaringan)).
 2. **Tennis Predictor** — menampilkan pertandingan tennis **hari ini** (tanggal
    WIB) dari Polymarket beserta jam mainnya, dengan probabilitas menang dari
@@ -129,6 +132,15 @@ melihat track record berjalan (rolling), bukan pengganti database permanen.
   Output-nya termasuk breakdown per bucket confidence (mengecek apakah
   confidence tinggi memang lebih akurat) dan hit rate tiap sinyal individual
   per timeframe (mengecek komponen mana yang benar-benar menambah nilai).
+- **Entry/SL/TP** (`crypto_model.compute_levels()`) dihitung dari ATR(14)
+  15m: SL = 1.5×ATR, TP = 3×ATR (risk:reward 1:2 — bar minimum umum dalam
+  trading, bukan hasil optimasi). Backtest menguji level ini secara historis
+  dengan menelusuri high/low tiap candel ke depan (sampai 16 jam) untuk lihat
+  TP atau SL yang kena duluan; kalau satu candle menyentuh keduanya sekaligus
+  (candle lebar/gap), diasumsikan SL yang menang (konservatif, karena data
+  OHLC tidak bisa memastikan urutan sebenarnya dalam candle itu). Expectancy
+  dilaporkan dalam satuan R (1R = jarak SL) berdasarkan win rate historis,
+  bukan diasumsikan otomatis untung dari rasio R:R di atas kertas.
 - **Tennis predictor** sengaja menampilkan harga Polymarket apa adanya
   (implied probability), bukan model independen yang "mengalahkan" pasar —
   mengklaim edge atas market tanpa model independen yang tervalidasi akan

@@ -45,6 +45,29 @@ def momentum(closes: pd.Series, lookback: int = 10) -> float:
     return float((closes.iloc[-1] - past) / past * 100)
 
 
+def atr(df: pd.DataFrame, period: int = 14) -> float:
+    """Average True Range: a volatility measure in price units (not %), used
+    to size stop-loss/take-profit distances relative to how much a specific
+    coin actually moves, instead of an arbitrary fixed percentage.
+
+    Uses Wilder's smoothing (EMA with alpha=1/period), the standard
+    definition. Returns NaN if there isn't enough data to compute even one
+    true-range value.
+    """
+    if len(df) < 2:
+        return float("nan")
+    high, low, close = df["high"], df["low"], df["close"]
+    prev_close = close.shift(1)
+    true_range = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    true_range = true_range.iloc[1:]  # first row has no prev_close
+    atr_series = true_range.ewm(alpha=1 / period, adjust=False).mean()
+    return float(atr_series.iloc[-1])
+
+
 def order_book_imbalance(bids: list[tuple[float, float]], asks: list[tuple[float, float]], depth: int = 20) -> float:
     """Returns value in [-1, 1]: positive = more bid volume (buy pressure) near top of book."""
     bid_vol = sum(q for _, q in bids[:depth])

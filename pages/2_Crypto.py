@@ -117,6 +117,24 @@ with tab_predict:
 
         st.line_chart(klines_by_tf["15m"].set_index("open_time")["close"], height=250)
 
+        st.subheader("Level referensi: Entry / Stop Loss / Take Profit")
+        levels = result["levels"]
+        if levels is None:
+            st.caption("Data belum cukup untuk menghitung ATR, level tidak tersedia.")
+        else:
+            lv_cols = st.columns(4)
+            lv_cols[0].metric("Entry", f"${levels['entry']:,.4f}")
+            lv_cols[1].metric("Stop Loss", f"${levels['stop_loss']:,.4f}")
+            lv_cols[2].metric("Take Profit", f"${levels['take_profit']:,.4f}")
+            lv_cols[3].metric("Risk:Reward", f"1:{levels['risk_reward']:.1f}")
+            st.caption(
+                f"Jarak SL/TP dihitung dari ATR(14) 15m saat ini (${levels['atr']:,.4f}) — "
+                f"SL = {crypto_model.SL_ATR_MULT}× ATR, TP = {crypto_model.TP_ATR_MULT}× ATR, "
+                "otomatis menyesuaikan volatilitas coin ini, bukan persentase tetap. "
+                "**Ini level referensi, bukan sinyal beli/jual** — cek tab Backtest untuk lihat "
+                "seberapa sering TP kena duluan dibanding SL secara historis sebelum dipakai."
+            )
+
         st.subheader("Rincian per timeframe")
         st.caption(
             "RSI/EMA/momentum dihitung terpisah di tiap timeframe lalu digabung "
@@ -230,6 +248,42 @@ with tab_backtest:
                 for row in signal_rows:
                     del row["_sort"]
                 st.dataframe(signal_rows, width="stretch", hide_index=True)
+
+                st.markdown("**Apakah TP/SL ala ATR ini beneran untung?**")
+                tp_sl = bt_result["tp_sl"]
+                st.caption(
+                    f"Simulasi: tiap sinyal historis dikasih level TP/SL versi ATR "
+                    f"(SL={crypto_model.SL_ATR_MULT}×ATR, TP={crypto_model.TP_ATR_MULT}×ATR), "
+                    f"lalu dicek candle demi candle (pakai high/low, bukan cuma close) mana yang "
+                    f"kena duluan, sampai {backtest.DEFAULT_TP_SL_WATCH_BARS // 4} jam ke depan. "
+                    f"Kalau TP dan SL sama-sama kena dalam satu candle yang sama, dianggap SL "
+                    f"(asumsi konservatif, karena data OHLC tidak bisa tahu mana yang duluan)."
+                )
+                tp_cols = st.columns(4)
+                tp_cols[0].metric("TP kena duluan", f"{tp_sl['tp']}×")
+                tp_cols[1].metric("SL kena duluan", f"{tp_sl['sl']}×")
+                tp_cols[2].metric("Timeout (belum kena)", f"{tp_sl['timeout']}×")
+                tp_cols[3].metric(
+                    "Win rate",
+                    f"{tp_sl['tp_rate']*100:.1f}%" if tp_sl["tp_rate"] is not None else "—",
+                    help="Dari trade yang sudah selesai (TP atau SL kena), timeout tidak dihitung.",
+                )
+                if tp_sl["expectancy_r"] is not None:
+                    breakeven_wr = 1 / (1 + crypto_model.TP_ATR_MULT / crypto_model.SL_ATR_MULT)
+                    verdict = "✅ Positif" if tp_sl["expectancy_r"] > 0 else "❌ Negatif"
+                    st.metric(
+                        "Expectancy",
+                        f"{tp_sl['expectancy_r']:+.3f} R",
+                        help=(
+                            f"1R = jarak SL. Butuh win rate > {breakeven_wr*100:.1f}% supaya "
+                            f"impas di R:R 1:{crypto_model.TP_ATR_MULT/crypto_model.SL_ATR_MULT:.0f} ini."
+                        ),
+                    )
+                    st.caption(
+                        f"{verdict} — expectancy dihitung dari data historis di atas, bukan "
+                        "diasumsikan dari rasio R:R di atas kertas. Sample historis terbatas "
+                        "(satu coin, beberapa hari), jadi jangan dianggap final."
+                    )
 
 
 # -------------------------------------------------------------- history ----
