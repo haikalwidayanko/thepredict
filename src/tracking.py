@@ -117,7 +117,14 @@ def get_accuracy_stats() -> dict:
 
 def log_match_prediction(event_title: str, slug: str, question: str,
                          predicted_outcome: str, probability: float,
-                         start_date: str | None = None) -> None:
+                         start_date: str | None = None,
+                         raw_outcome: str | None = None) -> None:
+    """Log a projection.
+
+    `predicted_outcome` is the human label shown in the UI (a player name);
+    `raw_outcome` is what Polymarket calls it ("Yes"/"No"). Resolution compares
+    the raw value, since that is what the settled market reports back.
+    """
     records = _load(MATCH_LOG)
     records.append({
         "id": str(uuid.uuid4()),
@@ -125,6 +132,7 @@ def log_match_prediction(event_title: str, slug: str, question: str,
         "slug": slug,
         "question": question,
         "predicted_outcome": predicted_outcome,
+        "raw_outcome": raw_outcome or predicted_outcome,
         "probability": probability,
         "start_date": start_date,
         "timestamp": time.time(),
@@ -170,8 +178,11 @@ def evaluate_pending_matches(fetch_market: Callable[[str], dict | None]) -> None
         if len(winners) != 1:
             continue  # not settled yet (or ambiguous) -- leave pending
 
+        # Compare against the raw Polymarket label; older records predate the
+        # raw_outcome field and stored the raw value in predicted_outcome.
+        predicted_raw = rec.get("raw_outcome") or rec["predicted_outcome"]
         rec["actual_outcome"] = winners[0]
-        rec["correct"] = winners[0] == rec["predicted_outcome"]
+        rec["correct"] = winners[0] == predicted_raw
         rec["resolved"] = True
         changed = True
     if changed:

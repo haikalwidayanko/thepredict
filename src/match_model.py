@@ -64,8 +64,13 @@ def match_status(start: str | None, end: str | None) -> str:
 
 @dataclass
 class OutcomeProbability:
-    outcome: str
+    outcome: str        # display label, e.g. "Cameron Norrie"
     probability: float  # 0-1
+    raw_outcome: str = ""  # label as Polymarket reports it, e.g. "Yes"
+
+    def __post_init__(self):
+        if not self.raw_outcome:
+            self.raw_outcome = self.outcome
 
 
 def liquidity_confidence(liquidity: float) -> str:
@@ -82,9 +87,15 @@ _SUB_MARKET_KEYWORDS = (
     "set ", " set", "1st set", "2nd set", "3rd set", "first set", "second set",
     "tiebreak", "tie-break", "tie break",
     "total games", "total game", "games won", "number of games",
-    "over ", "under ", "handicap", "spread",
+    "o/u", "over/under", "over ", "under ", "handicap", "spread",
     "straight sets", "correct score", "double fault", "aces", "ace ",
 )
+
+# Outcome labels that prove a market is a totals bet rather than a winner
+# market. Checking outcomes is more reliable than keyword-matching the title:
+# "... : Match O/U 21.5" can dodge a keyword list, but its Over/Under outcomes
+# give it away every time.
+_TOTALS_OUTCOMES = {"over", "under"}
 
 
 # A real head-to-head match is always titled "... A vs B". Season-long props
@@ -112,22 +123,86 @@ def is_finished(end_date: str | None, grace_hours: int = 6) -> bool:
     return datetime.now(timezone.utc) > end_dt + timedelta(hours=grace_hours)
 
 
-def is_match_winner_market(question: str) -> bool:
+def is_match_winner_market(question: str, outcomes: list[str] | None = None) -> bool:
     """True if the market is about who wins the match overall.
 
-    Uses an explicit keyword blocklist so the filtering is inspectable rather
-    than a black box. Anything mentioning sets, totals, or prop bets is out.
+    Combines an inspectable keyword blocklist with a check on the outcome
+    labels, because a totals market can dodge the keywords in its title but
+    never hides its Over/Under outcomes.
     """
     if not question:
         return False
+
+    if outcomes:
+        labels = {str(o).strip().lower() for o in outcomes}
+        if labels & _TOTALS_OUTCOMES:
+            return False
+
     q = f" {question.lower()} "
     return not any(kw in q for kw in _SUB_MARKET_KEYWORDS)
 
 
-def analyze_market(market: dict) -> dict:
+def players_from_title(title: str) -> list[str]:
+    """Pull the two sides out of 'Tournament: A vs B' -> ['A', 'B'].
+
+    Handles doubles ('Duncan/Ribero vs Bianchi/Sheehy') since the split is on
+    the vs separator, not on individual names. Returns [] if it cannot parse.
+    """
+    if not title:
+        return []
+
+    # Drop a leading tournament label ("Geneva Open: ...") but keep names that
+    # legitimately contain a colon-free slash, as doubles pairs do.
+    body = title.split(":", 1)[1] if ":" in title else title
+
+    lowered = body.lower()
+    for sep in _VS_SEPARATORS:
+        idx = lowered.find(sep)
+        if idx != -1:
+            left = body[:idx].strip()
+            right = body[idx + len(sep):].strip()
+            if left and right:
+                return [left, right]
+    return []
+
+
+def label_outcomes(question: str, outcomes: list[str], event_title: str) -> list[str]:
+    """Replace generic Yes/No labels with the player they actually refer to.
+
+    Polymarket phrases winner markets as "Will <player> win?" with Yes/No
+    outcomes. Showing "Yes 80%" tells the user nothing, so map Yes to the
+    player named in the question and No to their opponent. Anything we cannot
+    resolve confidently is returned untouched.
+    """
+    labels = [str(o).strip() for o in outcomes]
+    if {l.lower() for l in labels} != {"yes", "no"}:
+        return labels  # already real names
+
+    players = players_from_title(event_title)
+    if len(players) != 2:
+        return labels
+
+    q = (question or "").lower()
+    subject = next((p for p in players if p.lower() in q), None)
+    if subject is None:
+        # Fall back to matching on surname, e.g. "Will Norrie win?" against
+        # an event titled "... Cameron Norrie vs ...".
+        for p in players:
+            if any(part and part.lower() in q for part in p.replace("/", " ").split()):
+                subject = p
+                break
+    if subject is None:
+        return labels
+
+    opponent = players[1] if players[0] == subject else players[0]
+    return [subject if l.lower() == "yes" else opponent for l in labels]
+
+
+def analyze_market(market: dict, event_title: str = "") -> dict:
+    labels = label_outcomes(market["question"], market["outcomes"], event_title)
     outcomes = [
-        OutcomeProbability(outcome=o, probability=p)
-        for o, p in zip(market["outcomes"], market["prices"])
+        OutcomeProbability(outcome=label, probability=p, raw_outcome=raw)
+        for label, raw, p in zip(labels, market["outcomes"], market["prices"])
     ]
     outcomes.sort(key=lambda x: x.probability, reverse=True)
     favorite = outcomes[0] if outcomes else None

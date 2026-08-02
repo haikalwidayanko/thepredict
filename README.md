@@ -112,10 +112,16 @@ melihat track record berjalan (rolling), bukan pengganti database permanen.
   bisa diandalkan harga tersebut. Riwayat proyeksi mengukur seberapa sering
   favorit pasar benar-benar menang (hit rate) dan seberapa terkalibrasi
   probabilitasnya (Brier score: 0 = sempurna, 0.25 = setara tebak acak).
-- Filter pasar per-set memakai **blocklist kata kunci** (`set`, `total games`,
-  `handicap`, dll) di `match_model.is_match_winner_market()`. Pendekatan ini
-  transparan tapi tidak sempurna — kalau ada pasar yang lolos atau tersaring
-  keliru, tambahkan kata kuncinya di daftar tersebut.
+- Filter pasar per-set memakai **dua lapis** di
+  `match_model.is_match_winner_market()`: blocklist kata kunci (`set`,
+  `total games`, `o/u`, `handicap`, dll) **dan** pengecekan label outcome —
+  pasar dengan outcome `Over`/`Under` selalu ditolak. Lapis kedua ini penting
+  karena judul seperti `Match O/U 21.5` bisa lolos dari kata kunci.
+- Outcome `Yes`/`No` dari Polymarket diterjemahkan jadi **nama pemain** oleh
+  `match_model.label_outcomes()` (misal "Will Norrie win?" → `Cameron Norrie`
+  vs `Mariano Navone`). Kalau pemetaannya tidak yakin, label asli dibiarkan
+  daripada menebak. Nilai mentahnya tetap disimpan di log prediksi supaya
+  pencocokan hasil saat market settle tidak rusak.
 - Ini bukan nasihat finansial maupun ajakan berjudi. Gunakan sebagai salah
   satu input riset, bukan satu-satunya dasar keputusan.
 - Perhatikan aspek legal di yurisdiksi kamu: di Indonesia, Binance tidak

@@ -67,7 +67,7 @@ if events:
     # Only the overall match result -- per-set and prop markets are filtered out.
     main_markets = [
         m for m in selected_event["markets"]
-        if match_model.is_match_winner_market(m["question"])
+        if match_model.is_match_winner_market(m["question"], m["outcomes"])
     ]
     hidden_count = len(selected_event["markets"]) - len(main_markets)
 
@@ -75,7 +75,7 @@ if events:
         st.warning("Tidak ada pasar hasil akhir untuk pertandingan ini (hanya pasar per-set).")
 
     for market in main_markets:
-        analysis = match_model.analyze_market(market)
+        analysis = match_model.analyze_market(market, selected_event["title"])
         with st.container(border=True):
             st.markdown(f"**{analysis['question']}**")
 
@@ -105,6 +105,7 @@ if events:
                         slug=analysis["slug"],
                         question=analysis["question"],
                         predicted_outcome=fav.outcome,
+                        raw_outcome=fav.raw_outcome,
                         probability=fav.probability,
                         start_date=selected_event["start_date"],
                     )
