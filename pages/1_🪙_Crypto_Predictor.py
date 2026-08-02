@@ -60,7 +60,7 @@ display_df = volatile_df.rename(columns={
     "dayRangePct": "Rentang Harian (%)",
     "quoteVolume": "Volume (USDT)",
 })
-st.dataframe(display_df, use_container_width=True, hide_index=True)
+st.dataframe(display_df, width="stretch", hide_index=True)
 
 symbol = st.selectbox("Pilih coin untuk diprediksi", volatile_df["symbol"].tolist())
 
@@ -91,7 +91,7 @@ if symbol:
         }
         for s in result["breakdown"]
     ]
-    st.dataframe(breakdown_rows, use_container_width=True, hide_index=True)
+    st.dataframe(breakdown_rows, width="stretch", hide_index=True)
 
     if st.button("Catat prediksi ini ke track record"):
         tracking.log_prediction(symbol, result["direction"], result["last_price"], result["confidence"])
