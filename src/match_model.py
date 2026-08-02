@@ -5,7 +5,7 @@ instead of pretending to have an independent edge over it.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 LIQUIDITY_HIGH = 50_000
 LIQUIDITY_MEDIUM = 5_000
@@ -111,16 +111,35 @@ def is_match_event(title: str) -> bool:
     return any(sep in f" {title.lower()} " for sep in _VS_SEPARATORS)
 
 
-def is_finished(end_date: str | None, grace_hours: int = 6) -> bool:
-    """True if the scheduled end is comfortably in the past.
+def today_wib() -> date:
+    """Today's calendar date in WIB -- the day the user actually lives in."""
+    return datetime.now(WIB).date()
 
-    Polymarket sometimes keeps settled events flagged active, which would
-    otherwise push stale matches to the top of a schedule-ordered list.
+
+def is_today_wib(start_date: str | None) -> bool:
+    """True if the match starts on today's WIB calendar date.
+
+    Compared in WIB rather than UTC because a match at 06:00 WIB is still
+    "today" for the user even though it is still yesterday in UTC.
     """
-    end_dt = parse_iso(end_date)
-    if end_dt is None:
+    dt = parse_iso(start_date)
+    if dt is None:
         return False
-    return datetime.now(timezone.utc) > end_dt + timedelta(hours=grace_hours)
+    return dt.astimezone(WIB).date() == today_wib()
+
+
+def format_time_wib(value: str | None) -> str:
+    """Just the clock time, e.g. '19:00 WIB' -- for lists that are all one day."""
+    dt = parse_iso(value)
+    if dt is None:
+        return "--:--"
+    return f"{dt.astimezone(WIB):%H:%M} WIB"
+
+
+def format_today_wib() -> str:
+    """Human label for today's date, e.g. 'Min, 2 Agu 2026'."""
+    d = today_wib()
+    return f"{_HARI[d.weekday()]}, {d.day} {_BULAN[d.month - 1]} {d.year}"
 
 
 def is_match_winner_market(question: str, outcomes: list[str] | None = None) -> bool:

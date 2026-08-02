@@ -9,8 +9,10 @@ st.caption("Hasil akhir pertandingan · probabilitas dari harga pasar Polymarket
 
 
 @st.cache_data(ttl=90, show_spinner=False)
-def load_events(include_finished: bool):
-    return pm.get_tennis_events(include_finished=include_finished)
+def load_events(only_today: bool, _day_key: str):
+    # _day_key is part of the cache key so the cache drops at midnight WIB
+    # instead of serving yesterday's schedule.
+    return pm.get_tennis_events(only_today=only_today)
 
 
 # Resolve any past predictions first so the track record is current on load.
@@ -19,16 +21,12 @@ try:
 except Exception:
     pass  # never block the page on housekeeping
 
-include_finished = st.checkbox(
-    "Tampilkan juga pertandingan yang jadwalnya sudah lewat",
-    value=False,
-    help="Polymarket kadang masih menandai pertandingan lama sebagai aktif.",
-)
+st.info(f"📅 Jadwal hari ini — **{match_model.format_today_wib()}** (WIB)")
 
 events = []
 fetch_failed = False
 try:
-    events = load_events(include_finished)
+    events = load_events(True, str(match_model.today_wib()))
 except pm.PolymarketError as exc:
     fetch_failed = True
     st.error(str(exc))
@@ -38,17 +36,18 @@ except pm.PolymarketError as exc:
     )
 
 if not events and not fetch_failed:
-    st.info(
-        "Tidak ada pertandingan tennis yang sedang berjalan atau akan datang. "
-        "Centang opsi di atas untuk melihat yang jadwalnya sudah lewat."
+    st.warning(
+        "Tidak ada pertandingan tennis di Polymarket untuk hari ini. "
+        "Coba lagi nanti — daftar diperbarui setiap kali halaman dibuka."
     )
 
 if events:
-    st.write(f"**{len(events)}** pertandingan tennis, diurutkan dari jadwal terdekat.")
+    st.write(f"**{len(events)}** pertandingan hari ini, diurutkan dari jam main paling awal.")
 
     def event_label(i: int) -> str:
         e = events[i]
-        return f"{match_model.format_wib(e['start_date'])}  —  {e['title']}"
+        # All entries are today, so the date would just be noise -- show time only.
+        return f"{match_model.format_time_wib(e['start_date'])}  —  {e['title']}"
 
     choice = st.selectbox("Pilih pertandingan", range(len(events)), format_func=event_label)
     selected_event = events[choice]

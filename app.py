@@ -15,8 +15,8 @@ Web ini punya dua fitur, buka lewat menu di sidebar kiri:
   paling volatile hari ini, lihat prediksi arah jangka pendek dari model
   ensemble indikator teknikal (RSI, EMA cross, momentum, funding rate,
   order book imbalance).
-- **🎾 Tennis Predictor** — lihat pertandingan tennis yang aktif di Polymarket
-  lengkap dengan jadwal (WIB) dan probabilitas menang dari harga pasarnya.
+- **🎾 Tennis Predictor** — jadwal pertandingan tennis **hari ini** dari
+  Polymarket lengkap dengan jam main (WIB) dan probabilitas menang tiap pemain.
   Fokus ke hasil akhir pertandingan, plus riwayat proyeksi & ketepatannya.
 
 Semua data diambil langsung saat kamu buka/refresh halaman — tidak ada
