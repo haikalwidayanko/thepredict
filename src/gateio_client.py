@@ -89,7 +89,9 @@ def get_klines(symbol: str, interval: str = "15m", limit: int = 100) -> pd.DataF
         "t": "open_time", "o": "open", "h": "high", "l": "low", "c": "close", "v": "volume",
     })
     for col in ["open", "high", "low", "close", "volume"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col] = pd.to_numeric(df.get(col), errors="coerce")
+    if "open_time" not in df.columns:
+        raise GateIOError(f"Respons candlestick Gate.io untuk {symbol} tidak punya kolom waktu: {list(df.columns)}")
     df["open_time"] = pd.to_datetime(pd.to_numeric(df["open_time"]), unit="s")
     return df.sort_values("open_time").reset_index(drop=True)
 

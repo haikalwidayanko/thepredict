@@ -64,7 +64,9 @@ with tab_today:
                 "kurang bisa dipercaya."
             ),
         )
-        min_liquidity = match_model.LIQUIDITY_TIERS[tier_label]
+        # .get() with a floor default: a stale widget value (e.g. options
+        # changed between deploys) would otherwise raise a bare KeyError.
+        min_liquidity = match_model.LIQUIDITY_TIERS.get(tier_label, match_model.LIQUIDITY_LOW)
 
         events = [e for e in events if match_model.max_winner_liquidity(e) >= min_liquidity]
         hidden_by_filter = total_today - len(events)

@@ -95,11 +95,17 @@ with tab_predict:
     if symbol:
         try:
             klines_by_tf, funding, order_book = load_symbol_data(symbol)
+            result = crypto_model.predict_mtf(symbol, klines_by_tf, funding, order_book)
         except MarketDataError as exc:
             st.error(str(exc))
             st.stop()
+        except Exception as exc:
+            # Surface the real cause instead of Streamlit's redacted error
+            # screen, which hides everything behind "KeyError".
+            st.error(f"Gagal memproses {symbol}: {type(exc).__name__}: {exc}")
+            st.caption("Coba pilih koin lain, atau refresh halaman.")
+            st.stop()
 
-        result = crypto_model.predict_mtf(symbol, klines_by_tf, funding, order_book)
         agree, total_tf = result["alignment"]
 
         st.divider()
@@ -214,6 +220,9 @@ with tab_backtest:
                     bt_result = None
                 except ValueError as exc:
                     st.error(str(exc))
+                    bt_result = None
+                except Exception as exc:
+                    st.error(f"Backtest gagal: {type(exc).__name__}: {exc}")
                     bt_result = None
 
             if bt_result:
