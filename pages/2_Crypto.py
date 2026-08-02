@@ -2,7 +2,7 @@ import time
 
 import streamlit as st
 
-from src import crypto_model, market_data, tracking, ui
+from src import backtest, crypto_model, market_data, tracking, ui
 from src.errors import MarketDataError
 
 st.set_page_config(page_title="Crypto · Predictor", page_icon="🪙", layout="wide")
@@ -10,8 +10,10 @@ ui.show_logo()
 ui.page_header(
     "crypto",
     "🪙 Crypto Perpetual",
-    "Koin perpetual USDT paling volatile hari ini, dengan prediksi arah jangka pendek.",
+    "Koin perpetual USDT paling volatile hari ini, dengan prediksi arah jangka pendek multi-timeframe.",
 )
+
+MTF_INTERVALS = crypto_model.MTF_INTERVALS  # ["15m", "1h", "4h"]
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -21,10 +23,17 @@ def load_volatile_symbols():
 
 @st.cache_data(ttl=30, show_spinner=False)
 def load_symbol_data(symbol: str):
-    klines = market_data.get_klines(symbol, interval="15m", limit=100)
+    klines_by_tf = {
+        tf: market_data.get_klines(symbol, interval=tf, limit=100) for tf in MTF_INTERVALS
+    }
     funding = market_data.get_funding_rate(symbol)
     order_book = market_data.get_order_book(symbol, limit=50)
-    return klines, funding, order_book
+    return klines_by_tf, funding, order_book
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_backtest_klines(symbol: str, limit: int):
+    return market_data.get_klines(symbol, interval="15m", limit=limit)
 
 
 def current_price(symbol: str) -> float:
@@ -36,7 +45,9 @@ try:
 except Exception:
     pass  # never block the page on housekeeping
 
-tab_predict, tab_history = st.tabs(["📈 Prediksi Hari Ini", "📊 Riwayat & Akurasi"])
+tab_predict, tab_backtest, tab_history = st.tabs(
+    ["📈 Prediksi Hari Ini", "🔬 Backtest", "📊 Riwayat & Akurasi"]
+)
 
 
 # -------------------------------------------------------------- predict ----
@@ -64,6 +75,7 @@ with tab_predict:
         st.stop()
 
     st.subheader("Koin paling volatile hari ini")
+    st.caption("Daftar ini berubah tiap kali dibuka/refresh — diranking dari rentang harga 24 jam yang terus bergerak.")
     st.dataframe(
         volatile_df.rename(columns={
             "symbol": "Simbol",
@@ -77,32 +89,63 @@ with tab_predict:
     )
 
     symbol = st.selectbox("Pilih koin untuk diprediksi", volatile_df["symbol"].tolist())
+    if symbol:
+        st.session_state["last_symbol"] = symbol
 
     if symbol:
         try:
-            klines, funding, order_book = load_symbol_data(symbol)
+            klines_by_tf, funding, order_book = load_symbol_data(symbol)
         except MarketDataError as exc:
             st.error(str(exc))
             st.stop()
 
-        result = crypto_model.predict(symbol, klines, funding, order_book)
+        result = crypto_model.predict_mtf(symbol, klines_by_tf, funding, order_book)
+        agree, total_tf = result["alignment"]
 
         st.divider()
-        cols = st.columns(3)
+        cols = st.columns(4)
         cols[0].metric("Harga Terakhir", f"${result['last_price']:,.4f}")
         cols[1].metric("Prediksi Arah", result["direction"])
         cols[2].metric("Confidence", f"{result['confidence']*100:.0f}%")
+        cols[3].metric("Timeframe Sejalan", f"{agree}/{total_tf}")
 
-        st.line_chart(klines.set_index("open_time")["close"], height=250)
+        if agree < total_tf:
+            st.caption(
+                f"⚠️ Cuma {agree} dari {total_tf} timeframe yang sejalan dengan arah prediksi "
+                "— sinyalnya campur aduk antar timeframe, confidence-nya jangan ditelan mentah."
+            )
 
-        st.subheader("Rincian sinyal")
-        st.caption("Setiap sinyal dan bobotnya ditampilkan supaya modelnya bisa diaudit, bukan black box.")
+        st.line_chart(klines_by_tf["15m"].set_index("open_time")["close"], height=250)
+
+        st.subheader("Rincian per timeframe")
+        st.caption(
+            "RSI/EMA/momentum dihitung terpisah di tiap timeframe lalu digabung "
+            f"(bobot: {', '.join(f'{tf}={w:.0%}' for tf, w in crypto_model.MTF_WEIGHTS.items())})."
+        )
+        tf_rows = []
+        for tf in MTF_INTERVALS:
+            tf_result = result["timeframes"].get(tf)
+            if tf_result is None:
+                tf_rows.append({"Timeframe": tf, "Status": "data tidak cukup, dilewati"})
+                continue
+            tf_rows.append({
+                "Timeframe": tf,
+                "RSI": round(tf_result["rsi"], 1),
+                "EMA Signal": round(tf_result["ema_signal"], 2),
+                "Momentum": round(tf_result["momentum"], 2),
+                "Skor": round(tf_result["score"], 3),
+                "Arah": "NAIK" if tf_result["score"] >= 0 else "TURUN",
+            })
+        st.dataframe(tf_rows, width="stretch", hide_index=True)
+
+        st.subheader("Rincian sinyal gabungan")
+        st.caption("Price Action (MTF) = blend dari tabel di atas. Funding & order book dihitung sekali, bukan per timeframe.")
         st.dataframe(
             [{
                 "Sinyal": s.name,
                 "Nilai Mentah": round(s.raw_value, 4),
                 "Skor (-1..1)": round(s.signal, 2),
-                "Bobot": s.weight,
+                "Bobot": round(s.weight, 3),
                 "Kontribusi": round(s.contribution, 3),
             } for s in result["breakdown"]],
             width="stretch",
@@ -117,6 +160,76 @@ with tab_predict:
                 "Prediksi dicatat. Hasilnya dicek otomatis "
                 f"{tracking.DEFAULT_HORIZON_HOURS} jam lagi, saat kamu buka halaman ini."
             )
+
+
+# ------------------------------------------------------------- backtest ----
+with tab_backtest:
+    st.subheader("Uji model di data historis")
+    st.caption(
+        "Backtest ini menguji **hanya bagian price-action** (RSI + EMA cross + momentum, "
+        "digabung lintas 15m/1h/4h). Funding rate dan order book imbalance **tidak diikutkan** "
+        "karena Binance/Gate.io tidak menyediakan histori order book (cuma snapshot live) — "
+        "jadi angka di bawah ini adalah batas bawah performa model penuh, bukan gambaran lengkapnya. "
+        "Simulasinya berjalan maju di waktu (walk-forward): di tiap titik, model cuma melihat data "
+        "yang tersedia sampai titik itu, persis seperti kondisi nyata."
+    )
+
+    bt_symbol = st.text_input(
+        "Simbol untuk backtest",
+        value=st.session_state.get("last_symbol", ""),
+        placeholder="Contoh: BTCUSDT (Binance) atau BTC_USDT (Gate.io)",
+        help="Format simbol mengikuti provider yang aktif — lihat tabel koin di tab Prediksi.",
+    )
+    days = st.slider("Rentang data historis (hari)", min_value=3, max_value=15, value=10)
+
+    if st.button("Jalankan backtest", type="primary"):
+        if not bt_symbol:
+            st.warning("Isi simbol dulu.")
+        else:
+            with st.spinner(f"Mengambil {days} hari data 15m dan menjalankan simulasi..."):
+                try:
+                    limit = min(days * 96, 1500)  # 96 candle 15m per hari, dibatasi limit exchange
+                    hist_klines = load_backtest_klines(bt_symbol, limit)
+                    bt_result = backtest.run_price_action_backtest(hist_klines)
+                except MarketDataError as exc:
+                    st.error(str(exc))
+                    bt_result = None
+                except ValueError as exc:
+                    st.error(str(exc))
+                    bt_result = None
+
+            if bt_result:
+                start, end = bt_result["date_range"]
+                st.success(f"Simulasi selesai: {bt_result['total']} prediksi historis dari {start:%d %b} sampai {end:%d %b %Y}.")
+
+                ui.accuracy_row(
+                    total=bt_result["total"],
+                    correct=bt_result["correct"],
+                    hit_rate=bt_result["hit_rate"],
+                    brier=bt_result["brier"],
+                    noun="prediksi historis",
+                )
+
+                st.markdown("**Apakah confidence tinggi benar-benar lebih akurat?**")
+                st.caption("Model yang terkalibrasi baik harusnya makin akurat di bucket confidence yang makin tinggi.")
+                bucket_rows = [
+                    {"Bucket Confidence": name, "Jumlah": stat["total"],
+                     "Hit Rate": f"{stat['hit_rate']*100:.1f}%" if stat["hit_rate"] is not None else "—"}
+                    for name, stat in bt_result["confidence_buckets"].items()
+                ]
+                st.dataframe(bucket_rows, width="stretch", hide_index=True)
+
+                st.markdown("**Sinyal mana yang beneran nolong?**")
+                st.caption("Hit rate tiap sinyal kalau dipakai sendirian (bukan hasil kombinasi bertimbang).")
+                signal_rows = sorted(
+                    [{"Sinyal": name, "Jumlah": stat["total"], "Hit Rate": f"{stat['hit_rate']*100:.1f}%",
+                      "_sort": stat["hit_rate"]}
+                     for name, stat in bt_result["signal_hit_rates"].items()],
+                    key=lambda r: r["_sort"], reverse=True,
+                )
+                for row in signal_rows:
+                    del row["_sort"]
+                st.dataframe(signal_rows, width="stretch", hide_index=True)
 
 
 # -------------------------------------------------------------- history ----

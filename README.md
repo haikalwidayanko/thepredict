@@ -4,10 +4,13 @@ Web app Streamlit dengan dua fitur:
 
 1. **Crypto Predictor** — menampilkan koin USDT perpetual yang paling volatile
    hari ini (berdasarkan rentang harga intraday & volume), lalu memberi prediksi
-   arah jangka pendek dari model ensemble rule-based (RSI, EMA 9/21 cross,
-   momentum, funding rate, order book imbalance). Sumber data otomatis memilih
-   antara Binance Futures dan Gate.io Futures (lihat bagian
-   [Sumber data & blokir jaringan](#sumber-data--blokir-jaringan)).
+   arah jangka pendek dari model ensemble rule-based **multi-timeframe**
+   (RSI, EMA 9/21 cross, momentum dihitung terpisah di 15m/1h/4h lalu digabung,
+   plus funding rate & order book imbalance). Dilengkapi tab **Backtest** untuk
+   menguji ulang model di data historis (walk-forward, tanpa lookahead bias),
+   lihat mana sinyal yang beneran menambah akurasi dan mana yang tidak. Sumber
+   data otomatis memilih antara Binance Futures dan Gate.io Futures (lihat
+   bagian [Sumber data & blokir jaringan](#sumber-data--blokir-jaringan)).
 2. **Tennis Predictor** — menampilkan pertandingan tennis **hari ini** (tanggal
    WIB) dari Polymarket beserta jam mainnya, dengan probabilitas menang dari
    harga pasar dan label confidence berdasarkan likuiditas. Hanya menampilkan
@@ -106,6 +109,26 @@ melihat track record berjalan (rolling), bukan pengganti database permanen.
   dipilih supaya setiap sinyal dan bobotnya bisa diaudit (lihat tabel
   "Rincian sinyal" di halaman). Ini bukan jaminan akurasi; pasar kripto
   sangat noisy pada horizon pendek.
+- **Multi-timeframe (MTF)**: `crypto_model.timeframe_score()` menghitung
+  RSI/EMA-cross/momentum secara independen untuk tiap timeframe (15m/1h/4h),
+  lalu digabung berbobot (`MTF_WEIGHTS`, default 15m=25%/1h=40%/4h=35% —
+  timeframe lebih tinggi diberi bobot lebih besar karena less noisy, tapi ini
+  asumsi awal, bukan kesimpulan tervalidasi). Funding rate & order book
+  imbalance dihitung sekali di level gabungan, bukan per timeframe, karena
+  keduanya snapshot pasar yang sama untuk semua timeframe.
+- **Backtest** (`src/backtest.py`) menguji ulang **hanya bagian price-action**
+  dari model (RSI+EMA+momentum lintas 15m/1h/4h) memakai data historis nyata,
+  secara walk-forward — di tiap titik waktu simulasi, model cuma melihat data
+  yang tersedia sampai titik itu (diverifikasi lewat test regresi khusus yang
+  memotong data masa depan dan memastikan skor historis tidak berubah).
+  Funding rate dan order book imbalance **sengaja tidak diikutkan**: Binance
+  dan Gate.io tidak menyediakan histori kedalaman order book (cuma snapshot
+  live), jadi menyertakan salah satu tapi tidak yang lain akan menguji
+  ensemble yang berbeda dari yang benar-benar berjalan live. Hasil backtest
+  karena itu adalah **batas bawah** performa model penuh, bukan angka final.
+  Output-nya termasuk breakdown per bucket confidence (mengecek apakah
+  confidence tinggi memang lebih akurat) dan hit rate tiap sinyal individual
+  per timeframe (mengecek komponen mana yang benar-benar menambah nilai).
 - **Tennis predictor** sengaja menampilkan harga Polymarket apa adanya
   (implied probability), bukan model independen yang "mengalahkan" pasar —
   mengklaim edge atas market tanpa model independen yang tervalidasi akan
