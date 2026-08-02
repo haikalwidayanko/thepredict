@@ -111,6 +111,12 @@ def get_accuracy_stats() -> dict:
     return _hit_rate(_load(CRYPTO_LOG))
 
 
+def get_crypto_history(limit: int = 50) -> list[dict]:
+    """Most recent crypto predictions first, resolved and pending alike."""
+    records = _load(CRYPTO_LOG)
+    return sorted(records, key=lambda r: r["timestamp"], reverse=True)[:limit]
+
+
 # --------------------------------------------------------------------------
 # Tennis matches
 # --------------------------------------------------------------------------

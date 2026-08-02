@@ -40,13 +40,21 @@ def format_wib(value: str | None) -> str:
     )
 
 
-def match_status(start: str | None, end: str | None) -> str:
-    """Label derived purely from the schedule, not from any prediction."""
-    now = datetime.now(timezone.utc)
-    start_dt = parse_iso(start)
-    end_dt = parse_iso(end)
+# A tennis match rarely runs past ~3.5 hours, so anything older than that is
+# treated as done. Polymarket's endDate is the market's resolution deadline
+# (often days later), which is useless as a match end time.
+TYPICAL_MATCH_DURATION = timedelta(hours=3, minutes=30)
 
-    if start_dt and now < start_dt:
+
+def match_status(start: str | None) -> str:
+    """Label derived purely from the kick-off time, not from any prediction."""
+    start_dt = parse_iso(start)
+    if start_dt is None:
+        return "❔ Jadwal tidak tersedia"
+
+    now = datetime.now(timezone.utc)
+
+    if now < start_dt:
         delta = start_dt - now
         # Round to nearest unit -- flooring would show "29 menit" for a match
         # starting in 30 minutes, which reads as wrong.
@@ -56,10 +64,10 @@ def match_status(start: str | None, end: str | None) -> str:
             return f"⏳ Mulai dalam {round(delta.total_seconds() / 3600)} jam"
         return f"📅 {round(delta.total_seconds() / 86400)} hari lagi"
 
-    if end_dt and now > end_dt:
-        return "✅ Sudah lewat jadwal"
+    if now - start_dt <= TYPICAL_MATCH_DURATION:
+        return "🔴 Berlangsung"
 
-    return "🔴 Berlangsung / menunggu hasil"
+    return "✅ Selesai / menunggu hasil"
 
 
 @dataclass

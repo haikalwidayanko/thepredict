@@ -16,6 +16,25 @@ _FAR_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
 GAMMA_BASE_URL = "https://gamma-api.polymarket.com"
 TIMEOUT = 10
 
+# Where the actual match kick-off time lives, in order of preference.
+#
+# `startDate` is when the *market* opened, which for a tournament market can be
+# days before the match -- using it as the schedule is wrong. Polymarket has
+# carried the real kick-off under `gameStartTime` and (after that field was
+# deprecated in 2026) `startTime`. We try each in turn and fall back to
+# `startDate` only when none is present, so the code stays correct whichever
+# field the API is currently serving.
+START_TIME_FIELDS = ("gameStartTime", "startTime", "eventStartTime", "startDate")
+
+
+def pick_start_time(event: dict) -> tuple[str | None, str | None]:
+    """Return (timestamp, field_name_it_came_from) for an event's start."""
+    for field in START_TIME_FIELDS:
+        value = event.get(field)
+        if value:
+            return str(value), field
+    return None, None
+
 TENNIS_TAG_ID = 864
 
 
@@ -121,11 +140,10 @@ def get_tennis_events(limit: int = 500, only_today: bool = True) -> list[dict]:
         if not match_model.is_match_event(title):
             continue
 
-        start_date = event.get("startDate")
+        start_date, start_field = pick_start_time(event)
         if only_today and not match_model.is_today_wib(start_date):
             continue
 
-        end_date = event.get("endDate")
         markets = _extract_markets(event)
         if not markets:
             continue
@@ -135,7 +153,9 @@ def get_tennis_events(limit: int = 500, only_today: bool = True) -> list[dict]:
             "slug": event.get("slug"),
             "volume24hr": float(event.get("volume24hr") or 0),
             "start_date": start_date,
-            "end_date": end_date,
+            # Which field the time came from -- surfaced in the UI so a
+            # fallback to the market-open date is visible, not silent.
+            "start_field": start_field,
             "markets": markets,
         })
 
