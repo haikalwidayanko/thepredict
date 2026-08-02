@@ -12,10 +12,7 @@ import requests
 GAMMA_BASE_URL = "https://gamma-api.polymarket.com"
 TIMEOUT = 10
 
-TAG_IDS = {
-    "Sepakbola": 1059,
-    "Tennis": 864,
-}
+TENNIS_TAG_ID = 864
 
 
 class PolymarketError(RuntimeError):
@@ -65,19 +62,46 @@ def _extract_markets(event: dict) -> list[dict]:
     return parsed
 
 
-def get_active_events(category: str, limit: int = 30) -> list[dict]:
-    """Return active, unresolved events for a sport category, each with parsed markets."""
-    tag_id = TAG_IDS.get(category)
-    if tag_id is None:
-        raise ValueError(f"Kategori tidak dikenal: {category}")
+def get_market_by_slug(slug: str) -> dict | None:
+    """Fetch a single market, used to check whether a match has settled.
 
+    Returns a dict with `outcomes`, `prices` and `closed`, or None if the
+    market cannot be found or parsed.
+    """
+    raw = _get("/markets", {"slug": slug})
+    if not isinstance(raw, list) or not raw:
+        return None
+
+    market = raw[0]
+    outcomes = _parse_json_field(market.get("outcomes"), [])
+    prices = _parse_json_field(market.get("outcomePrices"), [])
+    if not outcomes or len(outcomes) != len(prices):
+        return None
+    try:
+        prices_f = [float(p) for p in prices]
+    except (TypeError, ValueError):
+        return None
+
+    return {
+        "outcomes": outcomes,
+        "prices": prices_f,
+        "closed": bool(market.get("closed")),
+        "question": market.get("question"),
+    }
+
+
+def get_tennis_events(limit: int = 60) -> list[dict]:
+    """Return active, unresolved tennis events, each with parsed markets.
+
+    Ordered by start time (soonest first) so the list reads like a schedule.
+    """
     raw = _get("/events", {
-        "tag_id": tag_id,
+        "tag_id": TENNIS_TAG_ID,
         "active": "true",
         "closed": "false",
         "limit": limit,
-        "order": "volume24hr",
-        "ascending": "false",
+        "order": "startDate",
+        "ascending": "true",
     })
     if not isinstance(raw, list):
         return []

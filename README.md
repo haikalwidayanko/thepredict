@@ -8,9 +8,11 @@ Web app Streamlit dengan dua fitur:
    momentum, funding rate, order book imbalance). Sumber data otomatis memilih
    antara Binance Futures dan Gate.io Futures (lihat bagian
    [Sumber data & blokir jaringan](#sumber-data--blokir-jaringan)).
-2. **Match Predictor** — menampilkan pertandingan sepakbola & tennis yang
-   sedang aktif di Polymarket, dengan probabilitas implisit dari harga pasar
-   dan label confidence berdasarkan likuiditas.
+2. **Tennis Predictor** — menampilkan pertandingan tennis yang sedang aktif di
+   Polymarket beserta jadwalnya (WIB), dengan probabilitas menang dari harga
+   pasar dan label confidence berdasarkan likuiditas. Hanya menampilkan pasar
+   **hasil akhir pertandingan** — pasar per-set, total games, dan prop lain
+   disaring keluar. Dilengkapi riwayat proyeksi dengan hit rate dan Brier score.
 
 Tidak ada notifikasi atau proses background — semua data diambil live saat
 kamu membuka/refresh halaman, dan kamu yang memilih coin/pertandingan mana
@@ -38,13 +40,14 @@ src/
   binance_client.py             # provider 1: Binance USDT-M Futures
   gateio_client.py              # provider 2: Gate.io USDT perpetual (fallback)
   errors.py                     # MarketDataError (exception bersama)
-  polymarket_client.py          # fetch data Polymarket Gamma API
+  polymarket_client.py          # fetch data Polymarket Gamma API (tennis)
   indicators.py                 # RSI, EMA, momentum, order book imbalance
   crypto_model.py               # ensemble scoring -> arah + confidence
-  match_model.py                # probabilitas implisit + confidence likuiditas
-  tracking.py                   # log prediksi lokal + hit-rate rolling
+  match_model.py                # probabilitas, jadwal WIB, filter pasar per-set
+  tracking.py                   # log prediksi lokal + hit-rate & Brier score
 data/
   predictions_log.json          # dibuat otomatis, tidak masuk git
+  match_predictions_log.json    # dibuat otomatis, tidak masuk git
 ```
 
 ## Sumber data & blokir jaringan
@@ -102,11 +105,17 @@ melihat track record berjalan (rolling), bukan pengganti database permanen.
   dipilih supaya setiap sinyal dan bobotnya bisa diaudit (lihat tabel
   "Rincian sinyal" di halaman). Ini bukan jaminan akurasi; pasar kripto
   sangat noisy pada horizon pendek.
-- **Match predictor** sengaja menampilkan harga Polymarket apa adanya
+- **Tennis predictor** sengaja menampilkan harga Polymarket apa adanya
   (implied probability), bukan model independen yang "mengalahkan" pasar —
   mengklaim edge atas market tanpa model independen yang tervalidasi akan
   menyesatkan. Label confidence dari likuiditas membantu menilai seberapa
-  bisa diandalkan harga tersebut.
+  bisa diandalkan harga tersebut. Riwayat proyeksi mengukur seberapa sering
+  favorit pasar benar-benar menang (hit rate) dan seberapa terkalibrasi
+  probabilitasnya (Brier score: 0 = sempurna, 0.25 = setara tebak acak).
+- Filter pasar per-set memakai **blocklist kata kunci** (`set`, `total games`,
+  `handicap`, dll) di `match_model.is_match_winner_market()`. Pendekatan ini
+  transparan tapi tidak sempurna — kalau ada pasar yang lolos atau tersaring
+  keliru, tambahkan kata kuncinya di daftar tersebut.
 - Ini bukan nasihat finansial maupun ajakan berjudi. Gunakan sebagai salah
   satu input riset, bukan satu-satunya dasar keputusan.
 - Perhatikan aspek legal di yurisdiksi kamu: di Indonesia, Binance tidak
