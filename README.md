@@ -1,29 +1,25 @@
-# Predictor Hub
+# Predictor — Crypto Perpetual
 
-Web app Streamlit dengan dua fitur:
+Web app Streamlit untuk mencari koin perpetual USDT yang sedang bergerak, lalu
+mengukur arahnya dengan model yang bisa diaudit.
 
-1. **Crypto Predictor** — menampilkan koin USDT perpetual yang paling volatile
-   hari ini (berdasarkan rentang harga intraday & volume), lalu memberi prediksi
-   arah jangka pendek dari model ensemble rule-based **multi-timeframe**
-   (RSI, EMA 9/21 cross, momentum dihitung terpisah di 15m/1h/4h lalu digabung,
-   plus funding rate & order book imbalance). Setiap prediksi disertai level
-   **Entry / Stop Loss / Take Profit** yang dihitung dari ATR (volatilitas
-   nyata coin itu, bukan persentase tetap). Dilengkapi tab **Backtest** untuk
-   menguji ulang model di data historis (walk-forward, tanpa lookahead bias) —
-   termasuk mengecek apakah TP beneran kena duluan dibanding SL secara
-   historis, dan sinyal mana yang beneran menambah akurasi. Sumber data
-   otomatis memilih antara Binance Futures dan Gate.io Futures (lihat
-   bagian [Sumber data & blokir jaringan](#sumber-data--blokir-jaringan)).
-2. **Tennis Predictor** — menampilkan pertandingan tennis **hari ini** (tanggal
-   WIB) dari Polymarket beserta jam mainnya, dengan probabilitas menang dari
-   harga pasar dan label confidence berdasarkan likuiditas. Hanya menampilkan
-   pasar **hasil akhir pertandingan** — pasar per-set, total games, dan prop
-   lain disaring keluar. Dilengkapi riwayat proyeksi dengan hit rate dan
-   Brier score.
+- Menampilkan koin USDT perpetual yang paling volatile hari ini (berdasarkan
+  rentang harga intraday & volume).
+- Prediksi arah jangka pendek dari model ensemble rule-based **multi-timeframe**
+  (RSI, EMA 9/21 cross, momentum dihitung terpisah di 15m/1h/4h lalu digabung,
+  plus funding rate & order book imbalance).
+- Level **Entry / Stop Loss / Take Profit** dihitung dari ATR — volatilitas
+  nyata koin itu, bukan persentase tetap.
+- Tab **Backtest** untuk menguji ulang model di data historis (walk-forward,
+  tanpa lookahead bias): sinyal mana yang benar-benar menambah akurasi, dan
+  apakah TP benar-benar kena duluan dibanding SL.
+- Tab **Riwayat** untuk melacak akurasi prediksi yang kamu catat sendiri.
+
+Sumber data otomatis memilih antara Binance Futures dan Gate.io Futures (lihat
+bagian [Sumber data & blokir jaringan](#sumber-data--blokir-jaringan)).
 
 Tidak ada notifikasi atau proses background — semua data diambil live saat
-kamu membuka/refresh halaman, dan kamu yang memilih coin/pertandingan mana
-yang mau dilihat.
+kamu membuka/refresh halaman, dan kamu yang memilih koin mana yang mau dilihat.
 
 ## Menjalankan secara lokal
 
@@ -32,40 +28,38 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Butuh koneksi internet (memanggil `fapi.binance.com` dan
-`gamma-api.polymarket.com`, keduanya API publik tanpa API key).
+Butuh koneksi internet (memanggil `fapi.binance.com` atau `api.gateio.ws`,
+keduanya API publik tanpa API key).
 
 ## Struktur proyek
 
 ```
 app.py                          # halaman utama
 pages/
-  1_Crypto_Predictor.py
-  2_Match_Predictor.py
+  1_Crypto.py                   # prediksi, backtest, riwayat
 src/
   market_data.py                # facade: pilih provider yang bisa dihubungi
   binance_client.py             # provider 1: Binance USDT-M Futures
   gateio_client.py              # provider 2: Gate.io USDT perpetual (fallback)
   errors.py                     # MarketDataError (exception bersama)
-  polymarket_client.py          # fetch data Polymarket Gamma API (tennis)
-  indicators.py                 # RSI, EMA, momentum, order book imbalance
-  crypto_model.py               # ensemble scoring -> arah + confidence
-  match_model.py                # probabilitas, jadwal WIB, filter pasar per-set
+  indicators.py                 # RSI, EMA, momentum, ATR, order book imbalance
+  crypto_model.py               # ensemble scoring -> arah, confidence, level SL/TP
+  backtest.py                   # simulasi walk-forward di data historis
   tracking.py                   # log prediksi lokal + hit-rate & Brier score
+  ui.py                         # logo, warna aksen, header halaman
 data/
   predictions_log.json          # dibuat otomatis, tidak masuk git
-  match_predictions_log.json    # dibuat otomatis, tidak masuk git
 ```
 
 ## Sumber data & blokir jaringan
 
 Sebagian ISP (termasuk banyak ISP di Indonesia) memblokir domain exchange
-kripto dan Polymarket di level DNS — query DNS biasa mengembalikan `NXDOMAIN`
-walaupun domainnya sebenarnya hidup.
+kripto di level DNS — query DNS biasa mengembalikan `NXDOMAIN` walaupun
+domainnya sebenarnya hidup.
 
-**Crypto Predictor** menangani ini otomatis lewat `src/market_data.py`: ia
-mencoba Binance dulu, dan kalau tidak bisa dihubungi, otomatis pindah ke
-Gate.io. Provider yang aktif ditampilkan di bagian atas halaman. Jadi:
+Aplikasi menangani ini otomatis lewat `src/market_data.py`: ia mencoba Binance
+dulu, dan kalau tidak bisa dihubungi, otomatis pindah ke Gate.io. Provider yang
+aktif ditampilkan di bagian atas halaman. Jadi:
 
 | Lingkungan | Provider aktif |
 |---|---|
@@ -73,12 +67,9 @@ Gate.io. Provider yang aktif ditampilkan di bagian atas halaman. Jadi:
 | Streamlit Cloud / jaringan bebas | Binance Futures |
 
 Harga antar exchange berbeda tipis, tapi korelasinya sangat tinggi sehingga
-sinyal arah dari model tetap sebanding.
-
-**Match Predictor** tidak punya fallback — datanya hanya ada di Polymarket.
-Kalau domainnya diblokir, halaman ini akan menampilkan pesan error dan fiturnya
-baru hidup saat aplikasi di-deploy ke cloud (server cloud tidak berada di balik
-ISP kamu).
+sinyal arah dari model tetap sebanding. Perhatikan bahwa **format simbol
+berbeda** antar provider (`BTCUSDT` di Binance, `BTC_USDT` di Gate.io) — ikuti
+format yang muncul di tabel koin pada provider yang sedang aktif.
 
 Untuk mengecek sendiri apakah sebuah domain diblokir DNS:
 
@@ -103,15 +94,15 @@ bukan domain mati.
 
 Catatan: filesystem di Streamlit Community Cloud bersifat sementara (reset
 saat app restart/redeploy), jadi `data/predictions_log.json` (dipakai untuk
-menghitung hit-rate crypto predictor) akan ikut reset. Ini cukup untuk
-melihat track record berjalan (rolling), bukan pengganti database permanen.
+menghitung hit-rate) akan ikut reset. Ini cukup untuk melihat track record
+berjalan (rolling), bukan pengganti database permanen.
 
 ## Metodologi & keterbatasan
 
-- **Crypto model** bersifat rule-based, bukan machine learning terlatih —
-  dipilih supaya setiap sinyal dan bobotnya bisa diaudit (lihat tabel
-  "Rincian sinyal" di halaman). Ini bukan jaminan akurasi; pasar kripto
-  sangat noisy pada horizon pendek.
+- **Model** bersifat rule-based, bukan machine learning terlatih — dipilih
+  supaya setiap sinyal dan bobotnya bisa diaudit (lihat tabel "Rincian sinyal"
+  di halaman). Ini bukan jaminan akurasi; pasar kripto sangat noisy pada
+  horizon pendek.
 - **Multi-timeframe (MTF)**: `crypto_model.timeframe_score()` menghitung
   RSI/EMA-cross/momentum secara independen untuk tiap timeframe (15m/1h/4h),
   lalu digabung berbobot (`MTF_WEIGHTS`, default 15m=25%/1h=40%/4h=35% —
@@ -135,71 +126,28 @@ melihat track record berjalan (rolling), bukan pengganti database permanen.
 - **Entry/SL/TP** (`crypto_model.compute_levels()`) dihitung dari ATR(14)
   15m: SL = 1.5×ATR, TP = 3×ATR (risk:reward 1:2 — bar minimum umum dalam
   trading, bukan hasil optimasi). Backtest menguji level ini secara historis
-  dengan menelusuri high/low tiap candel ke depan (sampai 16 jam) untuk lihat
+  dengan menelusuri high/low tiap candle ke depan (sampai 16 jam) untuk lihat
   TP atau SL yang kena duluan; kalau satu candle menyentuh keduanya sekaligus
   (candle lebar/gap), diasumsikan SL yang menang (konservatif, karena data
   OHLC tidak bisa memastikan urutan sebenarnya dalam candle itu). Expectancy
   dilaporkan dalam satuan R (1R = jarak SL) berdasarkan win rate historis,
   bukan diasumsikan otomatis untung dari rasio R:R di atas kertas.
-- **Tennis predictor** sengaja menampilkan harga Polymarket apa adanya
-  (implied probability), bukan model independen yang "mengalahkan" pasar —
-  mengklaim edge atas market tanpa model independen yang tervalidasi akan
-  menyesatkan. Label confidence dari likuiditas membantu menilai seberapa
-  bisa diandalkan harga tersebut. Riwayat proyeksi mengukur seberapa sering
-  favorit pasar benar-benar menang (hit rate) dan seberapa terkalibrasi
-  probabilitasnya (Brier score: 0 = sempurna, 0.25 = setara tebak acak).
-- Filter pasar per-set memakai **dua lapis** di
-  `match_model.is_match_winner_market()`: blocklist kata kunci (`set`,
-  `total games`, `o/u`, `handicap`, dll) **dan** pengecekan label outcome —
-  pasar dengan outcome `Over`/`Under` selalu ditolak. Lapis kedua ini penting
-  karena judul seperti `Match O/U 21.5` bisa lolos dari kata kunci.
-- Daftar dibatasi ke pertandingan yang **mulai pada tanggal WIB hari ini**
-  (`match_model.is_today_wib()`). Perbandingan sengaja dilakukan di WIB, bukan
-  UTC — pertandingan jam 06:30 WIB masih tercatat "kemarin" menurut UTC dan
-  akan hilang kalau difilter pakai UTC. Cache halaman memakai tanggal sebagai
-  bagian dari key supaya otomatis berganti saat lewat tengah malam.
-- Ambang likuiditas (`Tinggi`/`Sedang`/`Rendah`/`Sangat rendah`) dikalibrasi
-  khusus untuk market tennis: **≥ $10.000** Tinggi, **≥ $1.000** Sedang,
-  **≥ $100** Rendah, di bawah itu Sangat rendah. Angka lama (50k/5k) dipakai
-  untuk market politik besar dan membuat hampir semua pertandingan tennis
-  terlihat "Rendah" padahal likuiditasnya wajar untuk cabang ini. Ada filter
-  di halaman (`st.select_slider`, default **≥ $10.000**) yang membuang *market*
-  (bukan cuma event) di bawah ambang pilihan — ini juga menyingkirkan duplikat
-  market nyaris mati ($1 likuiditas) yang kadang muncul berdampingan dengan
-  market asli untuk pertanyaan yang sama.
-- Pertandingan yang diperkirakan sudah selesai (>5 jam sejak jadwal mulai)
-  dibuang total dari daftar, bukan cuma dilabeli "Selesai" — lihat
-  `match_model.is_likely_finished()`. Ini estimasi berbasis waktu, **bukan**
-  skor langsung, karena tidak ada sumber live-score yang terhubung; buffer
-  5 jam sengaja longgar supaya pertandingan best-of-5 Grand Slam yang panjang
-  tidak ikut terbuang saat masih berlangsung.
-- "Perkiraan selesai" dihapus dari tampilan karena nilainya berasal dari
-  `endDate` Polymarket (batas resolusi market, kadang lebih dari seminggu
-  setelah pertandingan), bukan jam selesai pertandingan asli.
-- Tiap pertandingan punya link pencarian Google yang di-scope ke Flashscore
-  (`match_model.external_schedule_link()`) untuk verifikasi jadwal/skor asli.
-  Ini sengaja pakai link pencarian, bukan URL match Flashscore langsung —
-  kita tidak punya ID match Flashscore untuk suatu event Polymarket, dan
-  menebak URL berisiko link mati/salah.
-- Outcome `Yes`/`No` dari Polymarket diterjemahkan jadi **nama pemain** oleh
-  `match_model.label_outcomes()` (misal "Will Norrie win?" → `Cameron Norrie`
-  vs `Mariano Navone`). Kalau pemetaannya tidak yakin, label asli dibiarkan
-  daripada menebak. Nilai mentahnya tetap disimpan di log prediksi supaya
-  pencocokan hasil saat market settle tidak rusak.
-- Ini bukan nasihat finansial maupun ajakan berjudi. Gunakan sebagai salah
-  satu input riset, bukan satu-satunya dasar keputusan.
+- **Daftar koin berubah-ubah** setiap halaman dibuka: peringkatnya berasal dari
+  rentang harga 24 jam yang terus bergerak, dengan cache 60 detik.
+- Ini bukan nasihat finansial. Level Entry/SL/TP adalah referensi berbasis
+  volatilitas, bukan sinyal beli/jual. Gunakan sebagai salah satu input riset,
+  bukan satu-satunya dasar keputusan.
 - Perhatikan aspek legal di yurisdiksi kamu: di Indonesia, Binance tidak
-  terdaftar di Bappebti, dan prediction market seperti Polymarket termasuk
-  kategori yang dilarang. Aplikasi ini hanya membaca data pasar publik dan
+  terdaftar di Bappebti. Aplikasi ini hanya membaca data pasar publik dan
   tidak melakukan transaksi apa pun.
 
 ## Ide pengembangan lanjutan
 
-- Tambah model independen (mis. Elo rating dari histori pertandingan) untuk
-  match predictor supaya bisa membandingkan estimasi sendiri vs harga pasar
-  dan mendeteksi mispricing.
-- Ganti scoring rule-based crypto dengan model terlatih (logistic
-  regression/gradient boosting) di atas data historis Binance, lalu
-  backtest dan tampilkan metrik seperti Brier score.
+- Ganti scoring rule-based dengan model terlatih (logistic regression/gradient
+  boosting) di atas data historis, lalu bandingkan hasil backtest-nya dengan
+  model rule-based sekarang.
+- Pakai hasil backtest untuk menyetel ulang bobot sinyal (`WEIGHTS` dan
+  `MTF_WEIGHTS`) secara empiris, bukan asumsi — misalnya menurunkan bobot RSI
+  yang sering di bawah 50% hit rate pada pasar trending.
 - Pindahkan `predictions_log.json` ke database persisten (mis. Supabase/
   SQLite eksternal) supaya track record tidak reset saat redeploy.

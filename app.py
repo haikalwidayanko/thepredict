@@ -3,7 +3,7 @@ import streamlit as st
 from src import tracking, ui
 
 st.set_page_config(
-    page_title="Predictor · Tennis & Crypto",
+    page_title="Predictor · Crypto Perpetual",
     page_icon="📈",
     layout="wide",
 )
@@ -13,44 +13,26 @@ ui.hero_logo()
 ui.page_header(
     "home",
     "Predictor",
-    "Dua alat analisis dalam satu tempat — pertandingan tennis dan pasar kripto perpetual.",
+    "Cari koin perpetual USDT yang lagi bergerak, lalu ukur arahnya dengan model yang bisa diaudit.",
 )
 
-col_tennis, col_crypto = st.columns(2, gap="large")
+stats = tracking.get_accuracy_stats()
 
-with col_tennis:
-    with st.container(border=True):
-        st.markdown("### 🎾 Tennis")
-        st.caption("Sumber: Polymarket")
-        st.write(
-            "Jadwal pertandingan **hari ini** beserta peluang menang tiap pemain, "
-            "diambil dari harga pasar Polymarket. Fokus ke hasil akhir — "
-            "pasar per-set dan total games disaring keluar."
-        )
-        t = tracking.get_match_accuracy_stats()
-        cols = st.columns(2)
-        cols[0].metric("Pertandingan tercatat", t["total"])
-        cols[1].metric(
-            "Akurasi", f"{t['hit_rate']*100:.0f}%" if t["hit_rate"] is not None else "—"
-        )
-        st.page_link("pages/1_Tennis.py", label="Buka Tennis", icon="🎾")
-
-with col_crypto:
-    with st.container(border=True):
-        st.markdown("### 🪙 Crypto Perpetual")
-        st.caption("Sumber: Binance / Gate.io")
-        st.write(
-            "Koin perpetual USDT paling volatile hari ini, dengan prediksi arah "
-            "jangka pendek dari model ensemble indikator teknikal (RSI, EMA cross, "
-            "momentum, funding rate, order book imbalance)."
-        )
-        c = tracking.get_accuracy_stats()
-        cols = st.columns(2)
-        cols[0].metric("Prediksi tercatat", c["total"])
-        cols[1].metric(
-            "Akurasi", f"{c['hit_rate']*100:.0f}%" if c["hit_rate"] is not None else "—"
-        )
-        st.page_link("pages/2_Crypto.py", label="Buka Crypto", icon="🪙")
+with st.container(border=True):
+    st.markdown("### 🪙 Crypto Perpetual")
+    st.caption("Sumber: Binance Futures / Gate.io Futures")
+    st.write(
+        "Koin perpetual USDT paling volatile hari ini, dengan prediksi arah jangka "
+        "pendek dari model ensemble multi-timeframe (RSI, EMA cross, momentum di "
+        "15m/1h/4h, plus funding rate dan order book imbalance), lengkap dengan "
+        "level Entry / Stop Loss / Take Profit berbasis ATR."
+    )
+    cols = st.columns(2)
+    cols[0].metric("Prediksi tercatat", stats["total"])
+    cols[1].metric(
+        "Akurasi", f"{stats['hit_rate']*100:.0f}%" if stats["hit_rate"] is not None else "—"
+    )
+    st.page_link("pages/1_Crypto.py", label="Buka Crypto Predictor", icon="🪙")
 
 st.divider()
 
@@ -63,19 +45,19 @@ how[0].markdown(
 )
 how[1].markdown(
     "**2 · Kamu yang memilih**\n\n"
-    "Pilih sendiri pertandingan atau koin yang ingin dilihat. "
-    "Tidak ada rekomendasi otomatis."
+    "Daftar koin diranking dari volatilitas 24 jam, jadi isinya berubah-ubah. "
+    "Kamu yang pilih mau lihat koin yang mana."
 )
 how[2].markdown(
     "**3 · Hasilnya diukur**\n\n"
-    "Setiap proyeksi yang kamu catat akan dicek otomatis setelah hasilnya keluar, "
-    "lalu ditampilkan sebagai akurasi di tab Riwayat."
+    "Prediksi yang kamu catat dicek otomatis setelah horizonnya lewat. "
+    "Tab Backtest juga menguji ulang model di data historis."
 )
 
 st.info(
-    "**Disclaimer** — Ini alat bantu analisis, bukan nasihat finansial maupun ajakan "
-    "berjudi, dan bukan jaminan hasil. Pasar kripto dan pertandingan olahraga pada "
-    "dasarnya tidak pasti; gunakan sebagai salah satu input, bukan satu-satunya dasar "
-    "keputusan.",
+    "**Disclaimer** — Ini alat bantu analisis, bukan nasihat finansial, dan bukan "
+    "jaminan hasil. Pasar kripto pada dasarnya tidak pasti; gunakan sebagai salah "
+    "satu input, bukan satu-satunya dasar keputusan. Level Entry/SL/TP adalah "
+    "referensi berbasis volatilitas, bukan sinyal beli/jual.",
     icon="⚠️",
 )

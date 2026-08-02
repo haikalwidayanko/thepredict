@@ -73,6 +73,6 @@ platform lain tanpa perubahan kode:
 | [Render](https://render.com) | Start command: `streamlit run app.py --server.port=$PORT --server.address=0.0.0.0` |
 | [Railway](https://railway.app) | Sama seperti Render |
 
-Catatan: fitur **Match Predictor** butuh akses ke `gamma-api.polymarket.com`.
-Kalau platform hosting-nya memblokir domain itu, halaman tersebut akan
-menampilkan error sementara halaman Crypto Predictor tetap jalan.
+Catatan: app butuh akses ke `fapi.binance.com` **atau** `api.gateio.ws`.
+Kalau salah satu diblokir dari platform hosting-nya, `src/market_data.py`
+otomatis memakai yang bisa dihubungi.

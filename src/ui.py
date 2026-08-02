@@ -1,9 +1,6 @@
 """Shared presentation helpers: logo, per-section accent colours, page headers.
 
-Each section gets a distinct accent so the two halves of the app read as
-different worlds -- green for tennis (court), amber for crypto (markets) --
-while sharing one layout language so it still feels like one product.
-All palettes are tuned for the dark theme in `.streamlit/config.toml`.
+Palettes are tuned for the dark theme in `.streamlit/config.toml`.
 """
 from __future__ import annotations
 
@@ -16,15 +13,8 @@ LOGO = ASSETS / "logo.svg"
 ICON = ASSETS / "icon.svg"
 
 SECTIONS = {
-    "tennis": {
-        "accent": "#4ade80",       # green-400 -- readable on a dark background
-        "accent_soft": "#122a1c",  # dark green tint, not white
-        "border": "#215a37",
-        "text": "#e5f9ee",
-        "eyebrow": "PREDIKSI OLAHRAGA",
-    },
     "crypto": {
-        "accent": "#fbbf24",       # amber-400
+        "accent": "#fbbf24",       # amber-400 -- readable on a dark background
         "accent_soft": "#2a2008",
         "border": "#5a4712",
         "text": "#fdf3d8",
