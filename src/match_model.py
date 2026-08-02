@@ -7,8 +7,25 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-LIQUIDITY_HIGH = 50_000
-LIQUIDITY_MEDIUM = 5_000
+# Liquidity tiers, calibrated for tennis markets specifically.
+#
+# These were originally set for large political markets (50k/5k), which made
+# almost every tennis match read as "Rendah" -- a real match with a few
+# thousand dollars of depth is respectable for this sport. Liquidity matters
+# because it is order-book depth: the thinner it is, the more easily a single
+# small order moves the price, so the implied probability may reflect one
+# person's opinion rather than a market consensus.
+LIQUIDITY_HIGH = 10_000    # deep enough to trust as consensus
+LIQUIDITY_MEDIUM = 1_000   # normal for a routine tennis match
+LIQUIDITY_LOW = 100        # thin -- weak signal
+# Below LIQUIDITY_LOW the price is effectively meaningless.
+
+LIQUIDITY_TIERS = {
+    "Semua": 0,
+    "≥ $100 (buang yang mati)": LIQUIDITY_LOW,
+    "≥ $1.000 (wajar)": LIQUIDITY_MEDIUM,
+    "≥ $10.000 (tebal)": LIQUIDITY_HIGH,
+}
 
 # Times are shown in WIB (Waktu Indonesia Barat, UTC+7).
 WIB = timezone(timedelta(hours=7))
@@ -86,7 +103,23 @@ def liquidity_confidence(liquidity: float) -> str:
         return "Tinggi"
     if liquidity >= LIQUIDITY_MEDIUM:
         return "Sedang"
-    return "Rendah"
+    if liquidity >= LIQUIDITY_LOW:
+        return "Rendah"
+    return "Sangat rendah"
+
+
+def max_winner_liquidity(event: dict) -> float:
+    """Deepest liquidity among an event's match-winner markets.
+
+    Used to rank/filter the schedule: totals and per-set markets are ignored
+    because they are not shown anyway.
+    """
+    depths = [
+        float(m.get("liquidity") or 0)
+        for m in event.get("markets", [])
+        if is_match_winner_market(m.get("question"), m.get("outcomes"))
+    ]
+    return max(depths, default=0.0)
 
 
 # Sub-markets we deliberately hide: the user wants the overall match result,

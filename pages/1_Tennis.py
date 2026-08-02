@@ -50,8 +50,34 @@ with tab_today:
             "Coba lagi nanti — daftar diperbarui setiap kali halaman dibuka."
         )
 
+    hidden_by_filter = 0
     if events:
-        st.write(f"**{len(events)}** pertandingan hari ini, diurutkan dari jam main paling awal.")
+        total_today = len(events)
+
+        tier_label = st.select_slider(
+            "Saring berdasarkan likuiditas",
+            options=list(match_model.LIQUIDITY_TIERS.keys()),
+            value="≥ $100 (buang yang mati)",
+            help=(
+                "Likuiditas = kedalaman order book. Makin tipis, makin gampang "
+                "harganya digerakkan satu order kecil, jadi probabilitasnya "
+                "kurang bisa dipercaya."
+            ),
+        )
+        min_liquidity = match_model.LIQUIDITY_TIERS[tier_label]
+
+        events = [e for e in events if match_model.max_winner_liquidity(e) >= min_liquidity]
+        hidden_by_filter = total_today - len(events)
+
+        if not events:
+            st.warning(
+                f"Semua {total_today} pertandingan hari ini punya likuiditas di bawah "
+                "ambang ini. Geser filter di atas ke kiri untuk melihatnya."
+            )
+
+    if events:
+        note = f" ({hidden_by_filter} disaring karena likuiditas tipis)" if hidden_by_filter else ""
+        st.write(f"**{len(events)}** pertandingan hari ini{note}, diurutkan dari jam main paling awal.")
 
         def event_label(i: int) -> str:
             e = events[i]

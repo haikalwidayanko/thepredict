@@ -123,6 +123,14 @@ melihat track record berjalan (rolling), bukan pengganti database permanen.
   UTC — pertandingan jam 06:30 WIB masih tercatat "kemarin" menurut UTC dan
   akan hilang kalau difilter pakai UTC. Cache halaman memakai tanggal sebagai
   bagian dari key supaya otomatis berganti saat lewat tengah malam.
+- Ambang likuiditas (`Tinggi`/`Sedang`/`Rendah`/`Sangat rendah`) dikalibrasi
+  khusus untuk market tennis: **≥ $10.000** Tinggi, **≥ $1.000** Sedang,
+  **≥ $100** Rendah, di bawah itu Sangat rendah. Angka lama (50k/5k) dipakai
+  untuk market politik besar dan membuat hampir semua pertandingan tennis
+  terlihat "Rendah" padahal likuiditasnya wajar untuk cabang ini. Ada filter
+  di halaman (`st.select_slider`) untuk menyembunyikan market yang likuiditasnya
+  di bawah ambang pilihan — defaultnya membuang market di bawah $100 yang
+  praktis mati (harga bisa digeser satu order kecil).
 - Outcome `Yes`/`No` dari Polymarket diterjemahkan jadi **nama pemain** oleh
   `match_model.label_outcomes()` (misal "Will Norrie win?" → `Cameron Norrie`
   vs `Mariano Navone`). Kalau pemetaannya tidak yakin, label asli dibiarkan
