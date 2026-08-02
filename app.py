@@ -9,6 +9,7 @@ st.set_page_config(
 )
 
 ui.show_logo()
+ui.hero_logo()
 ui.page_header(
     "home",
     "Predictor",

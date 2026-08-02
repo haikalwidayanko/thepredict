@@ -41,12 +41,28 @@ SECTIONS = {
 
 
 def show_logo() -> None:
-    """Put the wordmark in the sidebar, above the page navigation."""
+    """Put the wordmark in the sidebar, above the page navigation.
+
+    "large" is the biggest size Streamlit's st.logo supports (32px max
+    height, hard-capped by Streamlit itself) -- for a genuinely big logo,
+    use hero_logo() on the home page instead, which has no such ceiling.
+    """
     if LOGO.exists():
         try:
-            st.logo(str(LOGO), icon_image=str(ICON) if ICON.exists() else None)
+            st.logo(str(LOGO), size="large", icon_image=str(ICON) if ICON.exists() else None)
         except Exception:
             pass  # older Streamlit without st.logo -- not worth failing over
+
+
+def hero_logo(height_px: int = 72) -> None:
+    """A large logo banner for the home page, unconstrained by st.logo's cap."""
+    if not LOGO.exists():
+        return
+    svg = LOGO.read_text(encoding="utf-8")
+    st.markdown(
+        f"<div style='margin-bottom:0.5rem'>{svg.replace('<svg ', f'<svg style=\"height:{height_px}px;width:auto\" ', 1)}</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _css(section: str) -> str:
