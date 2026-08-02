@@ -87,6 +87,10 @@ bukan domain mati.
 3. Deploy. Tidak ada secrets/API key yang perlu diisi karena semua endpoint
    yang dipakai bersifat publik.
 
+> Kalau muncul error **"You do not have access to this app or it does not
+> exist"**, lihat [DEPLOY.md](DEPLOY.md) — itu masalah otorisasi GitHub, bukan
+> masalah kode, dan ada langkah perbaikan resminya di sana.
+
 Catatan: filesystem di Streamlit Community Cloud bersifat sementara (reset
 saat app restart/redeploy), jadi `data/predictions_log.json` (dipakai untuk
 menghitung hit-rate crypto predictor) akan ikut reset. Ini cukup untuk
