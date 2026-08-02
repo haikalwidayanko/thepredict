@@ -9,8 +9,8 @@ st.caption("Hasil akhir pertandingan · probabilitas dari harga pasar Polymarket
 
 
 @st.cache_data(ttl=90, show_spinner=False)
-def load_events():
-    return pm.get_tennis_events()
+def load_events(include_finished: bool):
+    return pm.get_tennis_events(include_finished=include_finished)
 
 
 # Resolve any past predictions first so the track record is current on load.
@@ -19,18 +19,32 @@ try:
 except Exception:
     pass  # never block the page on housekeeping
 
+include_finished = st.checkbox(
+    "Tampilkan juga pertandingan yang jadwalnya sudah lewat",
+    value=False,
+    help="Polymarket kadang masih menandai pertandingan lama sebagai aktif.",
+)
+
+events = []
+fetch_failed = False
 try:
-    events = load_events()
+    events = load_events(include_finished)
 except pm.PolymarketError as exc:
+    fetch_failed = True
     st.error(str(exc))
     st.caption(
         "Kalau errornya soal DNS, jaringan/ISP kamu kemungkinan memblokir "
         "Polymarket. Halaman ini akan jalan normal saat aplikasi di-deploy ke cloud."
     )
-    events = []
+
+if not events and not fetch_failed:
+    st.info(
+        "Tidak ada pertandingan tennis yang sedang berjalan atau akan datang. "
+        "Centang opsi di atas untuk melihat yang jadwalnya sudah lewat."
+    )
 
 if events:
-    st.write(f"**{len(events)}** pertandingan tennis aktif, diurutkan dari jadwal terdekat.")
+    st.write(f"**{len(events)}** pertandingan tennis, diurutkan dari jadwal terdekat.")
 
     def event_label(i: int) -> str:
         e = events[i]

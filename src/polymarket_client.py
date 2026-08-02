@@ -6,8 +6,12 @@ implied probabilities (last traded / midpoint), which is what we surface as-is.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 import requests
+
+# Sort key for events with an unparseable/missing start date -- they go last.
+_FAR_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
 
 GAMMA_BASE_URL = "https://gamma-api.polymarket.com"
 TIMEOUT = 10
@@ -90,11 +94,15 @@ def get_market_by_slug(slug: str) -> dict | None:
     }
 
 
-def get_tennis_events(limit: int = 60) -> list[dict]:
-    """Return active, unresolved tennis events, each with parsed markets.
+def get_tennis_events(limit: int = 200, include_finished: bool = False) -> list[dict]:
+    """Return active tennis *matches*, soonest first.
 
-    Ordered by start time (soonest first) so the list reads like a schedule.
+    Only head-to-head matches are returned -- tournament outrights ("2026 US
+    Open Winner") and season-long props ("win more Grand Slams") are dropped,
+    as are matches whose schedule has clearly passed unless asked for.
     """
+    from . import match_model  # local import: avoids a circular import at module load
+
     raw = _get("/events", {
         "tag_id": TENNIS_TAG_ID,
         "active": "true",
@@ -108,15 +116,28 @@ def get_tennis_events(limit: int = 60) -> list[dict]:
 
     events = []
     for event in raw:
+        title = event.get("title")
+        if not match_model.is_match_event(title):
+            continue
+
+        end_date = event.get("endDate")
+        if not include_finished and match_model.is_finished(end_date):
+            continue
+
         markets = _extract_markets(event)
         if not markets:
             continue
+
         events.append({
-            "title": event.get("title"),
+            "title": title,
             "slug": event.get("slug"),
             "volume24hr": float(event.get("volume24hr") or 0),
             "start_date": event.get("startDate"),
-            "end_date": event.get("endDate"),
+            "end_date": end_date,
             "markets": markets,
         })
+
+    # The API orders by startDate, but re-sort defensively: dropped events and
+    # missing dates would otherwise leave gaps in an assumed ordering.
+    events.sort(key=lambda e: match_model.parse_iso(e["start_date"]) or _FAR_FUTURE)
     return events

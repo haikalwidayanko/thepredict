@@ -87,6 +87,31 @@ _SUB_MARKET_KEYWORDS = (
 )
 
 
+# A real head-to-head match is always titled "... A vs B". Season-long props
+# and tournament outrights ("2026 US Open Winner", "win more Grand Slams")
+# never are, so requiring the separator is the cleanest discriminator.
+_VS_SEPARATORS = (" vs ", " vs. ", " v. ", " v ")
+
+
+def is_match_event(title: str) -> bool:
+    """True if the event is an actual head-to-head match, not a futures market."""
+    if not title:
+        return False
+    return any(sep in f" {title.lower()} " for sep in _VS_SEPARATORS)
+
+
+def is_finished(end_date: str | None, grace_hours: int = 6) -> bool:
+    """True if the scheduled end is comfortably in the past.
+
+    Polymarket sometimes keeps settled events flagged active, which would
+    otherwise push stale matches to the top of a schedule-ordered list.
+    """
+    end_dt = parse_iso(end_date)
+    if end_dt is None:
+        return False
+    return datetime.now(timezone.utc) > end_dt + timedelta(hours=grace_hours)
+
+
 def is_match_winner_market(question: str) -> bool:
     """True if the market is about who wins the match overall.
 
