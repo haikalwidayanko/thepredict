@@ -113,13 +113,16 @@ def get_market_by_slug(slug: str) -> dict | None:
     }
 
 
-def get_tennis_events(limit: int = 500, only_today: bool = True) -> list[dict]:
-    """Return today's tennis *matches*, earliest first.
+def get_tennis_events(limit: int = 500, only_today: bool = True,
+                      exclude_finished: bool = True) -> list[dict]:
+    """Return today's tennis *matches* that are live or upcoming, earliest first.
 
     Only head-to-head matches are returned -- tournament outrights ("2026 US
     Open Winner") and season-long props ("win more Grand Slams") are dropped.
     By default the list is restricted to matches starting on today's WIB date,
-    so the page reads as a daily schedule.
+    and matches estimated to have already finished are dropped entirely
+    (see match_model.is_likely_finished -- this is a time-elapsed heuristic,
+    not a real live score).
     """
     from . import match_model  # local import: avoids a circular import at module load
 
@@ -142,6 +145,8 @@ def get_tennis_events(limit: int = 500, only_today: bool = True) -> list[dict]:
 
         start_date, start_field = pick_start_time(event)
         if only_today and not match_model.is_today_wib(start_date):
+            continue
+        if exclude_finished and match_model.is_likely_finished(start_date):
             continue
 
         markets = _extract_markets(event)

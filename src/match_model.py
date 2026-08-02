@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from urllib.parse import quote
 
 # Liquidity tiers, calibrated for tennis markets specifically.
 #
@@ -57,10 +58,24 @@ def format_wib(value: str | None) -> str:
     )
 
 
-# A tennis match rarely runs past ~3.5 hours, so anything older than that is
-# treated as done. Polymarket's endDate is the market's resolution deadline
-# (often days later), which is useless as a match end time.
-TYPICAL_MATCH_DURATION = timedelta(hours=3, minutes=30)
+# We have no live-score feed, so "finished" is estimated from elapsed time
+# since kick-off rather than an actual result. Set generously (5h) to avoid
+# dropping long best-of-5 Grand Slam matches while they're still live --
+# this is a heuristic, not a guarantee, and can be wrong in either direction.
+TYPICAL_MATCH_DURATION = timedelta(hours=5)
+
+
+def is_likely_finished(start: str | None) -> bool:
+    """Best-effort guess that a match has ended, based on elapsed time alone.
+
+    There is no live-score data source wired in, so this cannot know the
+    actual result -- only that enough time has passed that the match is
+    probably over.
+    """
+    start_dt = parse_iso(start)
+    if start_dt is None:
+        return False
+    return datetime.now(timezone.utc) - start_dt > TYPICAL_MATCH_DURATION
 
 
 def match_status(start: str | None) -> str:
@@ -224,6 +239,19 @@ def players_from_title(title: str) -> list[str]:
             if left and right:
                 return [left, right]
     return []
+
+
+def external_schedule_link(event_title: str) -> str:
+    """A search link to verify the real-world schedule against a live-scores site.
+
+    We do not know Flashscore's actual match URL/ID for a given Polymarket
+    event, and fabricating one risks a dead or wrong link. A scoped Google
+    search is guaranteed to resolve and reliably surfaces the right Flashscore
+    (or similar) page as a top result.
+    """
+    players = players_from_title(event_title)
+    query = f"{players[0]} vs {players[1]}" if len(players) == 2 else event_title
+    return f"https://www.google.com/search?q=flashscore+{quote(query)}"
 
 
 def label_outcomes(question: str, outcomes: list[str], event_title: str) -> list[str]:

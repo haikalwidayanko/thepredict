@@ -3,7 +3,7 @@
 Each section gets a distinct accent so the two halves of the app read as
 different worlds -- green for tennis (court), amber for crypto (markets) --
 while sharing one layout language so it still feels like one product.
-All palettes are tuned for the light theme in `.streamlit/config.toml`.
+All palettes are tuned for the dark theme in `.streamlit/config.toml`.
 """
 from __future__ import annotations
 
@@ -17,21 +17,24 @@ ICON = ASSETS / "icon.svg"
 
 SECTIONS = {
     "tennis": {
-        "accent": "#15803d",       # green-700
-        "accent_soft": "#f0fdf4",  # green-50
-        "border": "#bbf7d0",       # green-200
+        "accent": "#4ade80",       # green-400 -- readable on a dark background
+        "accent_soft": "#122a1c",  # dark green tint, not white
+        "border": "#215a37",
+        "text": "#e5f9ee",
         "eyebrow": "PREDIKSI OLAHRAGA",
     },
     "crypto": {
-        "accent": "#b45309",       # amber-700
-        "accent_soft": "#fffbeb",  # amber-50
-        "border": "#fde68a",       # amber-200
+        "accent": "#fbbf24",       # amber-400
+        "accent_soft": "#2a2008",
+        "border": "#5a4712",
+        "text": "#fdf3d8",
         "eyebrow": "PASAR DERIVATIF",
     },
     "home": {
-        "accent": "#0f766e",       # teal-700
-        "accent_soft": "#f0fdfa",
-        "border": "#99f6e4",
+        "accent": "#2dd4bf",       # teal-400
+        "accent_soft": "#0f2624",
+        "border": "#1c4f49",
+        "text": "#dffaf7",
         "eyebrow": "",
     },
 }
@@ -77,12 +80,12 @@ def _css(section: str) -> str:
       .app-header h1 {{
           font-size: 1.75rem;
           font-weight: 700;
-          color: #0f172a;
+          color: {s['text']};
           margin: 0 0 0.3rem 0;
           line-height: 1.2;
       }}
       .app-header p {{
-          color: #475569;
+          color: #94a3b8;
           font-size: 0.94rem;
           margin: 0;
       }}
@@ -110,7 +113,7 @@ def _css(section: str) -> str:
       .match-schedule .status {{
           font-size: 0.95rem;
           font-weight: 600;
-          color: #334155;
+          color: {s['text']};
           background: {s['accent_soft']};
           border: 1px solid {s['border']};
           border-radius: 999px;

@@ -128,9 +128,24 @@ melihat track record berjalan (rolling), bukan pengganti database permanen.
   **≥ $100** Rendah, di bawah itu Sangat rendah. Angka lama (50k/5k) dipakai
   untuk market politik besar dan membuat hampir semua pertandingan tennis
   terlihat "Rendah" padahal likuiditasnya wajar untuk cabang ini. Ada filter
-  di halaman (`st.select_slider`) untuk menyembunyikan market yang likuiditasnya
-  di bawah ambang pilihan — defaultnya membuang market di bawah $100 yang
-  praktis mati (harga bisa digeser satu order kecil).
+  di halaman (`st.select_slider`, default **≥ $10.000**) yang membuang *market*
+  (bukan cuma event) di bawah ambang pilihan — ini juga menyingkirkan duplikat
+  market nyaris mati ($1 likuiditas) yang kadang muncul berdampingan dengan
+  market asli untuk pertanyaan yang sama.
+- Pertandingan yang diperkirakan sudah selesai (>5 jam sejak jadwal mulai)
+  dibuang total dari daftar, bukan cuma dilabeli "Selesai" — lihat
+  `match_model.is_likely_finished()`. Ini estimasi berbasis waktu, **bukan**
+  skor langsung, karena tidak ada sumber live-score yang terhubung; buffer
+  5 jam sengaja longgar supaya pertandingan best-of-5 Grand Slam yang panjang
+  tidak ikut terbuang saat masih berlangsung.
+- "Perkiraan selesai" dihapus dari tampilan karena nilainya berasal dari
+  `endDate` Polymarket (batas resolusi market, kadang lebih dari seminggu
+  setelah pertandingan), bukan jam selesai pertandingan asli.
+- Tiap pertandingan punya link pencarian Google yang di-scope ke Flashscore
+  (`match_model.external_schedule_link()`) untuk verifikasi jadwal/skor asli.
+  Ini sengaja pakai link pencarian, bukan URL match Flashscore langsung —
+  kita tidak punya ID match Flashscore untuk suatu event Polymarket, dan
+  menebak URL berisiko link mati/salah.
 - Outcome `Yes`/`No` dari Polymarket diterjemahkan jadi **nama pemain** oleh
   `match_model.label_outcomes()` (misal "Will Norrie win?" → `Cameron Norrie`
   vs `Mariano Navone`). Kalau pemetaannya tidak yakin, label asli dibiarkan

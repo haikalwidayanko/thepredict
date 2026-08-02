@@ -57,7 +57,7 @@ with tab_today:
         tier_label = st.select_slider(
             "Saring berdasarkan likuiditas",
             options=list(match_model.LIQUIDITY_TIERS.keys()),
-            value="≥ $100 (buang yang mati)",
+            value="≥ $10.000 (tebal)",
             help=(
                 "Likuiditas = kedalaman order book. Makin tipis, makin gampang "
                 "harganya digerakkan satu order kecil, jadi probabilitasnya "
@@ -106,15 +106,22 @@ with tab_today:
                 "waktu di atas adalah tanggal pembukaan market, jadi bisa meleset."
             )
 
-        # Only the overall match result -- per-set and totals markets are out.
+        schedule_link = match_model.external_schedule_link(selected_event["title"])
+        st.caption(f"🔗 [Cek jadwal & skor asli di Flashscore]({schedule_link})")
+
+        # Only the overall match result, and only markets meeting the chosen
+        # liquidity bar. Polymarket sometimes carries a stale duplicate market
+        # ($1 liquidity, $0 volume) alongside the real one for the same
+        # question -- the liquidity floor filters that out too.
         main_markets = [
             m for m in selected_event["markets"]
             if match_model.is_match_winner_market(m["question"], m["outcomes"])
+            and float(m.get("liquidity") or 0) >= min_liquidity
         ]
         hidden_count = len(selected_event["markets"]) - len(main_markets)
 
         if not main_markets:
-            st.warning("Tidak ada pasar hasil akhir untuk pertandingan ini.")
+            st.warning("Tidak ada pasar hasil akhir dengan likuiditas cukup untuk pertandingan ini.")
 
         for market in main_markets:
             analysis = match_model.analyze_market(market, selected_event["title"])
@@ -151,7 +158,10 @@ with tab_today:
                         st.rerun()
 
         if hidden_count:
-            st.caption(f"{hidden_count} pasar per-set/total disembunyikan — halaman ini fokus ke hasil akhir.")
+            st.caption(
+                f"{hidden_count} pasar disembunyikan — pasar per-set/total, atau "
+                "likuiditasnya di bawah ambang filter."
+            )
 
 
 # -------------------------------------------------------------- history ----
