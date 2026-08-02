@@ -31,8 +31,8 @@ Butuh koneksi internet (memanggil `fapi.binance.com` dan
 ```
 app.py                          # halaman utama
 pages/
-  1_🪙_Crypto_Predictor.py
-  2_🏆_Match_Predictor.py
+  1_Crypto_Predictor.py
+  2_Match_Predictor.py
 src/
   market_data.py                # facade: pilih provider yang bisa dihubungi
   binance_client.py             # provider 1: Binance USDT-M Futures

@@ -11,9 +11,9 @@ st.markdown(
     """
 Web ini punya dua fitur, buka lewat menu di sidebar kiri:
 
-- **🪙 Crypto Predictor** — pilih dari daftar koin perpetual Binance Futures
-  yang lagi paling volatile hari ini, lihat prediksi arah jangka pendek dari
-  model ensemble indikator teknikal (RSI, EMA cross, momentum, funding rate,
+- **🪙 Crypto Predictor** — pilih dari daftar koin perpetual USDT yang lagi
+  paling volatile hari ini, lihat prediksi arah jangka pendek dari model
+  ensemble indikator teknikal (RSI, EMA cross, momentum, funding rate,
   order book imbalance).
 - **🏆 Match Predictor** — lihat pertandingan sepakbola & tennis yang lagi
   aktif di Polymarket beserta probabilitas implisit dari harga pasarnya.
